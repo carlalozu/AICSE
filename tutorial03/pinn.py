@@ -16,13 +16,17 @@ class NNAnsatz(torch.nn.Module):
                  output_dimension,
                  n_hidden_layers,
                  hidden_size):
-
-        # TODO: Setup your layers.
-        pass
+        """Setup your layers."""
+        super().__init__()
+        self.layers = torch.nn.Sequential(
+            torch.nn.Linear(input_dimension, hidden_size),
+            torch.nn.SiLU(),
+            torch.nn.Linear(hidden_size, output_dimension),
+        )
 
     def forward(self, x):
-        # TODO: Do a forward pass on `x`.
-        pass
+        """Do a forward pass on `x`."""
+        return self.layers(x)
 
 
 class PINNTrainer:
@@ -45,12 +49,19 @@ class PINNTrainer:
         self.lambda_u = 10
 
         # F Dense NN to approximate the solution of the underlying heat equation
-        # TODO: Write the `NNAnsatz` class to be a feed-forward neural net
+        # Write the `NNAnsatz` class to be a feed-forward neural net
         # that you'll train to approximate your solution.
-        self.approximate_solution = NNAnsatz(...)
+        # TODO: check values of parameters
+        self.approximate_solution = NNAnsatz(input_dimension=self.space_dimensions,
+                                             output_dimension=self.space_dimensions,
+                                             n_hidden_layers=1,
+                                             hidden_size=100,
+                                             )
 
-        # TODO: Setup optimizer.
-        self.optimizer = ...
+        # Setup optimizer.
+        self.optimizer = torch.optim.Adam(
+            self.approximate_solution.parameters(), lr=1e-4)
+        # TODO: check for the order of the optimizer, at least 2nd degree
 
         # Generator of Sobol sequences.
         self.soboleng = torch.quasirandom.SobolEngine(
@@ -166,9 +177,8 @@ class PINNTrainer:
         u = self.approximate_solution(input_int)
         # `grad` computes the gradient of a SCALAR function `L` w.r.t
         # some input (n x m) tensor  [[x1, y1], ...,[xn ,yn]] (here `m` = 2).
-        #
         # it returns grad_L = [[dL/dx1, dL/dy1]...,[dL/dxn, dL/dyn]]
-        # NOTO: pytorch considers a tensor [u1, u2,u3, ... ,un] a vector
+        # NOTE: pytorch considers a tensor [u1, u2,u3, ... ,un] a vector
         # whereas `sum_u = u1 + u2 + u3 + u4 + ... + un` as a "scalar" one
 
         # In our case ui = u(xi), therefore the line below returns:
@@ -176,16 +186,18 @@ class PINNTrainer:
         # and dsum_u/dxi = d(u1 + u2 + u3 + u4 + ... + un) /dxi ==
         #  d(u(x1) + u(x2) u3(x3) + u4(x4) + ... + u(xn))/dxi == dui / dxi.
 
-        # TODO: compute `grad_u` w.r.t (t, x) (time + 1D space).
-        grad_u = ...
+        # compute `grad_u` w.r.t (t, x) (time + 1D space).
+        grad_u = torch.autograd.grad(
+            u, input_int, grad_outputs=torch.ones_like(u), create_graph=True)[0]
 
-        # TODO: Extract time and space derivative at all input points.
-        grad_u_t = ...
-        grad_u_x = ...
+        # Extract time and space derivative at all input points.
+        grad_u_t = grad_u[:, 0]
+        grad_u_x = grad_u[:, 1]
 
         # TODO: Compute `grads` again across the spatial dimension --
         # here you should reuse something you just computed.
-        grad_u_xx = ...
+        grad_u_xx = torch.autograd.grad(
+            grad_u_x, input_int, grad_outputs=torch.ones_like(grad_u_x), create_graph=True)[0]
 
         # Compute the residual term you're getting.
         residual = ...
@@ -229,15 +241,13 @@ class PINNTrainer:
 
     def fit(self, num_epochs, verbose):
         """Function to fit the PINN
-
-        Args:
-            num_epochs (_type_): _description_
-            verbose (_type_): _description_
-
-        Returns:
-            _type_: _description_
         """
-        history = list()
+        history = []
+        inp_train_sb = None
+        u_train_sb = None
+        inp_train_tb = None
+        u_train_tb = None
+        inp_train_int = None
 
         # Loop over epochs
         for epoch in range(num_epochs):
@@ -245,37 +255,37 @@ class PINNTrainer:
                 print("################################ ",
                       epoch, " ################################")
 
-            for j, inputs_and_outputs in enumerate(zip(self.training_set_sb,
-                                                       self.training_set_tb,
-                                                       self.training_set_int)):
-                (
-                    (inp_train_sb, u_train_sb),
-                    (inp_train_tb, u_train_tb),
-                    (inp_train_int, u_train_int)
-                ) = inputs_and_outputs
+                for inputs_and_outputs in zip(self.training_set_sb,
+                                              self.training_set_tb,
+                                              self.training_set_int):
+                    (
+                        (inp_train_sb, u_train_sb),
+                        (inp_train_tb, u_train_tb),
+                        (inp_train_int, _)
+                    ) = inputs_and_outputs
 
-                def closure():
-                    self.optimizer.zero_grad()
-                    loss = self.compute_loss(
-                        inp_train_sb,
-                        u_train_sb,
-                        inp_train_tb,
-                        u_train_tb,
-                        inp_train_int,
-                        verbose=verbose)
-                    loss.backward()
+                    def closure():
+                        self.optimizer.zero_grad()
+                        loss = self.compute_loss(
+                            inp_train_sb,
+                            u_train_sb,
+                            inp_train_tb,
+                            u_train_tb,
+                            inp_train_int,
+                            verbose=verbose)
+                        loss.backward()
 
-                    history.append(loss.item())
-                    return loss
+                        history.append(loss.item())
+                        return loss
 
-                self.optimizer.step(closure=closure)
+                    self.optimizer.step(closure=closure)
 
         print('Final Loss: ', history[-1])
 
         return history
 
     def plot(self):
-        """Plot
+        """Create plot
         """
         inputs = self.soboleng.draw(100000)
         inputs = self.convert(inputs)
@@ -283,7 +293,7 @@ class PINNTrainer:
         output = self.approximate_solution(inputs).reshape(-1, )
         exact_output = self.exact_solution(inputs).reshape(-1, )
 
-        fig, axs = plt.subplots(1, 2, figsize=(16, 8), dpi=150)
+        _, axs = plt.subplots(1, 2, figsize=(16, 8), dpi=150)
         im1 = axs[0].scatter(
             inputs[:, 1].detach(), inputs[:, 0].detach(),
             c=exact_output.detach(), cmap="jet")
