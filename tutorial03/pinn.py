@@ -14,7 +14,7 @@ class NNAnsatz(torch.nn.Module):
     def __init__(self,
                  input_dimension,
                  output_dimension,
-                 n_hidden_layers,
+                 n_hidden_layers,  # TODO: how to incorporate hidden layers?
                  hidden_size):
         """Setup your layers."""
         super().__init__()
@@ -51,17 +51,16 @@ class PINNTrainer:
         # F Dense NN to approximate the solution of the underlying heat equation
         # Write the `NNAnsatz` class to be a feed-forward neural net
         # that you'll train to approximate your solution.
-        # TODO: check values of parameters
-        self.approximate_solution = NNAnsatz(input_dimension=self.space_dimensions,
+        # check values of parameters
+        self.approximate_solution = NNAnsatz(input_dimension=self.space_dimensions+1,
                                              output_dimension=self.space_dimensions,
                                              n_hidden_layers=1,
                                              hidden_size=100,
                                              )
 
         # Setup optimizer.
-        self.optimizer = torch.optim.Adam(
-            self.approximate_solution.parameters(), lr=1e-4)
-        # TODO: check for the order of the optimizer, at least 2nd degree
+        self.optimizer = torch.optim.LBFGS(
+            self.approximate_solution.parameters())
 
         # Generator of Sobol sequences.
         self.soboleng = torch.quasirandom.SobolEngine(
@@ -194,13 +193,13 @@ class PINNTrainer:
         grad_u_t = grad_u[:, 0]
         grad_u_x = grad_u[:, 1]
 
-        # TODO: Compute `grads` again across the spatial dimension --
+        # Compute `grads` again across the spatial dimension --
         # here you should reuse something you just computed.
         grad_u_xx = torch.autograd.grad(
-            grad_u_x, input_int, grad_outputs=torch.ones_like(grad_u_x), create_graph=True)[0]
+            grad_u_x, input_int, grad_outputs=torch.ones_like(grad_u_x), create_graph=True)[0][:, 1]
 
         # Compute the residual term you're getting.
-        residual = ...
+        residual = grad_u_t - grad_u_xx
         return residual.reshape(-1,)
 
     def compute_loss(
@@ -214,19 +213,19 @@ class PINNTrainer:
         assert u_pred_sb.shape[1] == u_train_sb.shape[1]
         assert u_pred_tb.shape[1] == u_train_tb.shape[1]
 
-        # TODO: Compute interior PDE residual.
-        r_int = ...
+        # Compute interior PDE residual.
+        r_int = self.compute_pde_residual(inp_train_int)
 
-        # TOOD: Compute spatial boundary residual.
-        r_sb = ...
+        # Compute spatial boundary residual.
+        r_sb = (u_pred_sb - u_train_sb).reshape(-1,)
 
-        # TODO: Compute temporal boundary residual
-        r_tb = ...
+        # Compute temporal boundary residual
+        r_tb = (u_pred_tb - u_train_tb).reshape(-1,)
 
-        # TODO: Compute losses based on these residuals.
-        loss_sb = ...
-        loss_tb = ...
-        loss_int = ...
+        # Compute losses based on these residuals. Integrate using quadrature rule
+        loss_sb = (r_sb*r_sb).sum()/len(r_sb)
+        loss_tb = (r_tb*r_tb).sum()/len(r_tb)
+        loss_int = (r_int*r_int).sum()/len(r_int)
 
         loss_u = loss_sb + loss_tb
         loss = torch.log10(self.lambda_u * (loss_sb + loss_tb) + loss_int)
