@@ -1,3 +1,4 @@
+"""Utils module"""
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
@@ -38,11 +39,16 @@ def fit(model, num_epochs, optimizer, verbose=True):
             print("################################ ",
                   epoch, " ################################")
 
-        for j, ((inp_train_sb, u_train_sb), (inp_train_tb, u_train_tb), (inp_train_int, u_train_int)) in enumerate(zip(model.training_set_sb, model.training_set_tb, model.training_set_int)):
+        for (inp_train_sb, u_train_sb), (inp_train_tb, u_train_tb), (inp_train_int, _) in zip(model.training_set_sb, model.training_set_tb, model.training_set_int):
             def closure():
                 optimizer.zero_grad()
                 loss = model.compute_loss(
-                    inp_train_sb, u_train_sb, inp_train_tb, u_train_tb, inp_train_int, verbose=verbose)
+                    inp_train_sb,
+                    u_train_sb,
+                    inp_train_tb,
+                    u_train_tb,
+                    inp_train_int,
+                    verbose=verbose)
                 loss.backward()
 
                 history.append(loss.item())

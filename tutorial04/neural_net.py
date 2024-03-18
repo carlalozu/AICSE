@@ -1,12 +1,13 @@
-
+"""Module with NN"""
 import torch
-import torch.nn as nn
+from torch import nn
 
 torch.autograd.set_detect_anomaly(True)
 torch.manual_seed(128)
 
 
 class NeuralNet(nn.Module):
+    """Neural Net architecture"""
 
     def __init__(self,
                 input_dimension,

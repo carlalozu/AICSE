@@ -1,8 +1,11 @@
+"""Inverse problem using physics-informed neural network (PINN)"""
 import torch
 from torch.utils.data import DataLoader
+from neural_net import NeuralNet
+from utils import initial_condition, exact_solution, source
 
-
-class Pinns:
+class InversePinns:
+    """Class to solve an inverse problem using physics-informed neural network (PINN)"""
     def __init__(self, n_int_, n_sb_, n_tb_):
         self.n_int = n_int_
         self.n_sb = n_sb_
@@ -18,17 +21,28 @@ class Pinns:
         # Parameter to balance role of data and PDE
         self.lambda_u = 10
 
-        ##############
-        # TO DO: Create FF Dense NNs for approxiamte solution and approximate
-        # coefficient (replace the None value)
-        ##############
+        ########################################################
+        # Create FF Dense NNs for approxiamte solution and approximate coefficient
 
         # FF Dense NN to approximate the solution of the underlying heat equation
-        self.approximate_solution = None
-        # FF Dense NN to approximate the conductivity we wish to infer
-        self.approximate_coefficient = None
+        self.approximate_solution = NeuralNet(
+            input_dimension=self.domain_extrema.shape[0],
+            output_dimension=1,
+            n_hidden_layers=3,
+            neurons=20,
+            retrain_seed=42
+        )
 
-        ##############
+        # FF Dense NN to approximate the conductivity we wish to infer
+        self.approximate_coefficient = NeuralNet(
+            input_dimension=self.domain_extrema.shape[0],
+            output_dimension=1,
+            n_hidden_layers=3,
+            neurons=20,
+            retrain_seed=42
+        )
+
+        ########################################################
 
         # Generator of Sobol sequences --> Sobol sequences (see
         # https://en.wikipedia.org/wiki/Sobol_sequence)
@@ -41,17 +55,19 @@ class Pinns:
         # number of sensors to record temperature
         self.n_sensor = 50
 
-    ################################################################################################
+    #######################################################################
     def convert(self, tens):
         """Function to linearly transform a tensor whose value are between 0 and
         1 to a tensor whose values are between the domain extrema"""
-        assert (tens.shape[1] == self.domain_extrema.shape[0])
-        return tens * (self.domain_extrema[:, 1] - self.domain_extrema[:, 0]) + self.domain_extrema[:, 0]
+        assert tens.shape[1] == self.domain_extrema.shape[0]
+        return tens * (self.domain_extrema[:, 1] - self.domain_extrema[:, 0]
+                       ) + self.domain_extrema[:, 0]
 
-    ################################################################################################
+    #######################################################################
     def add_temporal_boundary_points(self):
         """Function returning the input-output tensor required to assemble the
         training set S_tb corresponding to the temporal boundary """
+
         t0 = self.domain_extrema[0, 0]
         input_tb = self.convert(self.soboleng.draw(self.n_tb))
         input_tb[:, 0] = torch.full(input_tb[:, 0].shape, t0)
@@ -84,30 +100,28 @@ class Pinns:
         training set S_int corresponding to the interior domain where the PDE is
         enforced"""
 
-        ##############
-        # TO DO: Return input-output tensor required to assemble the training
-        # set S_int corresponding to the interior domain where the PDE is
-        # enforced
-        ##############
+        ########################################################
+        # Return input-output tensor required to assemble the training set S_int
+        # corresponding to the interior domain where the PDE is enforced
 
-        input_int = None
-        output_int = None
+        input_int = self.convert(self.soboleng.draw(self.n_int))
+        output_int = torch.zeros((input_int.shape[0], 1))
 
-        ##############
+        ########################################################
 
         return input_int, output_int
 
     def get_measurement_data(self):
+        """Take measurments every 0.001 sec on a set of randomly or
+        uniformly placed (in space) sensors """
         torch.random.manual_seed(42)
 
-        ##############
-        # TO DO: take measurments every 0.001 sec on a set of randomly or
-        # uniformly placed (in space) sensors (replace None)
-        ##############
+        ##########################################
+        # TODO: Define the input-output tensor required to assemble the training
         t = None
         x = None
 
-        ##############
+        ##########################################
 
         input_meas = torch.cartesian_prod(t, x)
         output_meas = exact_solution(input_meas).reshape(-1, 1)
@@ -131,7 +145,7 @@ class Pinns:
 
         return training_set_sb, training_set_tb, training_set_int
 
-    ################################################################################################
+    #######################################################################
     def apply_initial_condition(self, input_tb):
         """Function to compute the terms required in the definition of the
         TEMPORAL boundary residual"""
@@ -139,10 +153,10 @@ class Pinns:
         return u_pred_tb
 
     def apply_boundary_conditions(self, input_sb):
+        """Compute the terms required in the definition of the SPATIAL boundary residual"""
 
         ##############
-        # TO DO: Compute the terms required in the definition of the SPATIAL boundary residual
-        ##############
+        # TODO
 
         u_pred_sb = None
 
@@ -173,7 +187,7 @@ class Pinns:
         grad_u_x = grad_u[:, 1]
 
         ##############
-        # TO DO: Compute the second derivative (HINT: Pay attention to the
+        # TODO: Compute the second derivative (HINT: Pay attention to the
         # dimensions! --> torch.autograd.grad(..., ..., ...)[...][...]
         ##############
         grad_u_xx = None
@@ -200,7 +214,7 @@ class Pinns:
         assert u_pred_meas.shape[1] == u_train_meas.shape[1]
 
         ##############
-        # TO DO: Define respective resiudals and loss values
+        # TODO: Define respective resiudals and loss values
         ##############
 
         r_int = None
