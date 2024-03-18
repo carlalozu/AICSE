@@ -8,8 +8,13 @@ torch.manual_seed(128)
 
 class NeuralNet(nn.Module):
 
-    def __init__(self, input_dimension, output_dimension, n_hidden_layers, neurons, retrain_seed):
-        super(NeuralNet, self).__init__()
+    def __init__(self,
+                input_dimension,
+                output_dimension,
+                n_hidden_layers,
+                neurons,
+                retrain_seed):
+        super().__init__()
         # Number of input dimensions n
         self.input_dimension = input_dimension
         # Number of output dimensions m
@@ -34,10 +39,13 @@ class NeuralNet(nn.Module):
         transformations defining the network"""
 
         ##############
-        # TO DO: Implement forward pass through the network
+        # Implement forward pass through the network
+        x = self.input_layer(x)
+        x = self.hidden_layers(x)
+        x = self.output_layer(x)
         ##############
 
-        return None
+        return x
 
     def init_xavier(self):
         """Xavier initialization"""

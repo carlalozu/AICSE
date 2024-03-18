@@ -19,7 +19,8 @@ class Pinns:
         self.lambda_u = 10
 
         ##############
-        # TO DO: Create FF Dense NNs for approxiamte solution and approximate coefficient (replace the None value)
+        # TO DO: Create FF Dense NNs for approxiamte solution and approximate
+        # coefficient (replace the None value)
         ##############
 
         # FF Dense NN to approximate the solution of the underlying heat equation
@@ -29,7 +30,8 @@ class Pinns:
 
         ##############
 
-        # Generator of Sobol sequences --> Sobol sequences (see https://en.wikipedia.org/wiki/Sobol_sequence)
+        # Generator of Sobol sequences --> Sobol sequences (see
+        # https://en.wikipedia.org/wiki/Sobol_sequence)
         self.soboleng = torch.quasirandom.SobolEngine(
             dimension=self.domain_extrema.shape[0])
 
@@ -48,7 +50,8 @@ class Pinns:
 
     ################################################################################################
     def add_temporal_boundary_points(self):
-        """Function returning the input-output tensor required to assemble the training set S_tb corresponding to the temporal boundary """
+        """Function returning the input-output tensor required to assemble the
+        training set S_tb corresponding to the temporal boundary """
         t0 = self.domain_extrema[0, 0]
         input_tb = self.convert(self.soboleng.draw(self.n_tb))
         input_tb[:, 0] = torch.full(input_tb[:, 0].shape, t0)
@@ -57,7 +60,9 @@ class Pinns:
         return input_tb, output_tb
 
     def add_spatial_boundary_points(self):
-        """Function returning the input-output tensor required to assemble the training set S_sb corresponding to the spatial boundary """
+        """Function returning the input-output tensor required to assemble the
+        training set S_sb corresponding to the spatial boundary"""
+
         x0 = self.domain_extrema[1, 0]
         xL = self.domain_extrema[1, 1]
 
@@ -80,7 +85,9 @@ class Pinns:
         enforced"""
 
         ##############
-        # TO DO: Return input-output tensor required to assemble the training set S_int corresponding to the interior domain where the PDE is enforced
+        # TO DO: Return input-output tensor required to assemble the training
+        # set S_int corresponding to the interior domain where the PDE is
+        # enforced
         ##############
 
         input_int = None
@@ -94,7 +101,8 @@ class Pinns:
         torch.random.manual_seed(42)
 
         ##############
-        # TO DO: take measurments every 0.001 sec on a set of randomly or uniformly placed (in space) sensors (replace None)
+        # TO DO: take measurments every 0.001 sec on a set of randomly or
+        # uniformly placed (in space) sensors (replace None)
         ##############
         t = None
         x = None
@@ -107,7 +115,6 @@ class Pinns:
         output_meas = output_meas + noise
 
         return input_meas, output_meas
-
 
     def assemble_datasets(self):
         """Function returning the training sets S_sb, S_tb, S_int as dataloader"""
@@ -126,7 +133,8 @@ class Pinns:
 
     ################################################################################################
     def apply_initial_condition(self, input_tb):
-        """Function to compute the terms required in the definition of the TEMPORAL boundary residual"""
+        """Function to compute the terms required in the definition of the
+        TEMPORAL boundary residual"""
         u_pred_tb = self.approximate_solution(input_tb)
         return u_pred_tb
 
@@ -142,27 +150,31 @@ class Pinns:
 
         return u_pred_sb
 
-
     def compute_pde_residual(self, input_int):
         """Function to compute the PDE residuals"""
         input_int.requires_grad = True
         u = self.approximate_solution(input_int).reshape(-1,)
         k = self.approximate_coefficient(input_int).reshape(-1,)
 
-        # grad compute the gradient of a "SCALAR" function L with respect to some input nxm TENSOR Z=[[x1, y1],[x2,y2],[x3,y3],...,[xn,yn]], m=2
-        # it returns grad_L = [[dL/dx1, dL/dy1],[dL/dx2, dL/dy2],[dL/dx3, dL/dy3],...,[dL/dxn, dL/dyn]]
-        # Note: pytorch considers a tensor [u1, u2,u3, ... ,un] a vectorial function
-        # whereas sum_u = u1 + u2 u3 + u4 + ... + un as a "scalar" one
+        # grad compute the gradient of a "SCALAR" function L with respect to
+        # some input nxm TENSOR Z=[[x1, y1],[x2,y2],[x3,y3],...,[xn,yn]], m=2
+        # it returns grad_L = [[dL/dx1, dL/dy1],[dL/dx2, dL/dy2],[dL/dx3,
+        # dL/dy3],...,[dL/dxn, dL/dyn]]
+        # Note: pytorch considers a tensor [u1, u2,u3, ... ,un] a vectorial
+        # function whereas sum_u = u1 + u2 u3 + u4 + ... + un as a "scalar" one
 
         # In our case ui = u(xi), therefore the line below returns:
-        # grad_u = [[dsum_u/dx1, dsum_u/dy1],[dsum_u/dx2, dsum_u/dy2],[dsum_u/dx3, dL/dy3],...,[dsum_u/dxm, dsum_u/dyn]]
-        # and dsum_u/dxi = d(u1 + u2 u3 + u4 + ... + un)/dxi = d(u(x1) + u(x2) u3(x3) + u4(x4) + ... + u(xn))/dxi = dui/dxi
+        # grad_u = [[dsum_u/dx1, dsum_u/dy1],[dsum_u/dx2,
+        # dsum_u/dy2],[dsum_u/dx3, dL/dy3],...,[dsum_u/dxm, dsum_u/dyn]]
+        # and dsum_u/dxi = d(u1 + u2 u3 + u4 + ... + un)/dxi = d(u(x1) + u(x2)
+        # u3(x3) + u4(x4) + ... + u(xn))/dxi = dui/dxi
         grad_u = torch.autograd.grad(u.sum(), input_int, create_graph=True)[0]
         grad_u_t = grad_u[:, 0]
         grad_u_x = grad_u[:, 1]
 
         ##############
-        # TO DO: Compute the second derivative (HINT: Pay attention to the dimensions! --> torch.autograd.grad(..., ..., ...)[...][...]
+        # TO DO: Compute the second derivative (HINT: Pay attention to the
+        # dimensions! --> torch.autograd.grad(..., ..., ...)[...][...]
         ##############
         grad_u_xx = None
 
