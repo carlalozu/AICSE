@@ -1,4 +1,3 @@
-from types import NotImplementedType
 import torch
 from torch.utils.data import DataLoader
 
@@ -41,16 +40,15 @@ class Pinns:
         self.n_sensor = 50
 
     ################################################################################################
-    # Function to linearly transform a tensor whose value are between 0 and 1
-    # to a tensor whose values are between the domain extrema
     def convert(self, tens):
+        """Function to linearly transform a tensor whose value are between 0 and
+        1 to a tensor whose values are between the domain extrema"""
         assert (tens.shape[1] == self.domain_extrema.shape[0])
         return tens * (self.domain_extrema[:, 1] - self.domain_extrema[:, 0]) + self.domain_extrema[:, 0]
 
     ################################################################################################
-    # Function returning the input-output tensor required to assemble the training set S_tb corresponding to the temporal boundary
-
     def add_temporal_boundary_points(self):
+        """Function returning the input-output tensor required to assemble the training set S_tb corresponding to the temporal boundary """
         t0 = self.domain_extrema[0, 0]
         input_tb = self.convert(self.soboleng.draw(self.n_tb))
         input_tb[:, 0] = torch.full(input_tb[:, 0].shape, t0)
@@ -58,8 +56,8 @@ class Pinns:
 
         return input_tb, output_tb
 
-    # Function returning the input-output tensor required to assemble the training set S_sb corresponding to the spatial boundary
     def add_spatial_boundary_points(self):
+        """Function returning the input-output tensor required to assemble the training set S_sb corresponding to the spatial boundary """
         x0 = self.domain_extrema[1, 0]
         xL = self.domain_extrema[1, 1]
 
@@ -76,8 +74,10 @@ class Pinns:
 
         return torch.cat([input_sb_0, input_sb_L], 0), torch.cat([output_sb_0, output_sb_L], 0)
 
-    #  Function returning the input-output tensor required to assemble the training set S_int corresponding to the interior domain where the PDE is enforced
     def add_interior_points(self):
+        """Function returning the input-output tensor required to assemble the
+        training set S_int corresponding to the interior domain where the PDE is
+        enforced"""
 
         ##############
         # TO DO: Return input-output tensor required to assemble the training set S_int corresponding to the interior domain where the PDE is enforced
@@ -108,9 +108,9 @@ class Pinns:
 
         return input_meas, output_meas
 
-    # Function returning the training sets S_sb, S_tb, S_int as dataloader
 
     def assemble_datasets(self):
+        """Function returning the training sets S_sb, S_tb, S_int as dataloader"""
         input_sb, output_sb = self.add_spatial_boundary_points()  # S_sb
         input_tb, output_tb = self.add_temporal_boundary_points()  # S_tb
         input_int, output_int = self.add_interior_points()  # S_int
@@ -125,8 +125,8 @@ class Pinns:
         return training_set_sb, training_set_tb, training_set_int
 
     ################################################################################################
-    # Function to compute the terms required in the definition of the TEMPORAL boundary residual
     def apply_initial_condition(self, input_tb):
+        """Function to compute the terms required in the definition of the TEMPORAL boundary residual"""
         u_pred_tb = self.approximate_solution(input_tb)
         return u_pred_tb
 
@@ -142,9 +142,9 @@ class Pinns:
 
         return u_pred_sb
 
-    # Function to compute the PDE residuals
 
     def compute_pde_residual(self, input_int):
+        """Function to compute the PDE residuals"""
         input_int.requires_grad = True
         u = self.approximate_solution(input_int).reshape(-1,)
         k = self.approximate_coefficient(input_int).reshape(-1,)
@@ -174,17 +174,18 @@ class Pinns:
 
         return residual.reshape(-1, )
 
-    # Function to compute the total loss (weighted sum of spatial boundary loss, temporal boundary loss and interior loss)
     def compute_loss(self, inp_train_sb, u_train_sb, inp_train_tb, u_train_tb, inp_train_int, verbose=True):
+        """Function to compute the total loss (weighted sum of spatial boundary
+        loss, temporal boundary loss and interior loss)"""
         u_pred_sb = self.apply_boundary_conditions(inp_train_sb)
         u_pred_tb = self.apply_initial_condition(inp_train_tb)
 
         inp_train_meas, u_train_meas = self.get_measurement_data()
         u_pred_meas = self.approximate_solution(inp_train_meas)
 
-        assert (u_pred_sb.shape[1] == u_train_sb.shape[1])
-        assert (u_pred_tb.shape[1] == u_train_tb.shape[1])
-        assert (u_pred_meas.shape[1] == u_train_meas.shape[1])
+        assert u_pred_sb.shape[1] == u_train_sb.shape[1]
+        assert u_pred_tb.shape[1] == u_train_tb.shape[1]
+        assert u_pred_meas.shape[1] == u_train_meas.shape[1]
 
         ##############
         # TO DO: Define respective resiudals and loss values

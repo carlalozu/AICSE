@@ -4,11 +4,11 @@ import torch
 
 
 def initial_condition(x):
-    # Initial condition to solve the heat equation u0(x)=-sin(pi x)
+    """Initial condition to solve the heat equation u0(x)=-sin(pi x)"""
     return -torch.sin(np.pi * x)
 
 def exact_solution(inputs):
-    # Exact solution for the heat equation ut = u_xx with the IC above
+    """Exact solution for the heat equation ut = u_xx with the IC above"""
     t = inputs[:, 0]
     x = inputs[:, 1]
 

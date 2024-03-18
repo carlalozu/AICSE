@@ -29,9 +29,9 @@ class NeuralNet(nn.Module):
         # Random Seed for weight initialization
         self.init_xavier()
 
-    # The forward function performs the set of affine and non-linear transformations defining the network
-    # (see equation above)
     def forward(self, x):
+        """The forward function performs the set of affine and non-linear
+        transformations defining the network"""
 
         ##############
         # TO DO: Implement forward pass through the network
@@ -39,12 +39,12 @@ class NeuralNet(nn.Module):
 
         return None
 
-    # Xavier initialization
     def init_xavier(self):
+        """Xavier initialization"""
         torch.manual_seed(self.retrain_seed)
 
         def init_weights(m):
-            if type(m) == nn.Linear and m.weight.requires_grad and m.bias.requires_grad:
+            if isinstance(type(m), nn.Linear) and m.weight.requires_grad and m.bias.requires_grad:
                 g = nn.init.calculate_gain('tanh')
                 torch.nn.init.xavier_uniform_(m.weight, gain=g)
                 # torch.nn.init.xavier_normal_(m.weight, gain=g)
