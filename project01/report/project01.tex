@@ -1,5 +1,5 @@
 \documentclass[unicode,11pt,a4paper,oneside,numbers=endperiod,openany]{scrartcl}
-
+\usepackage{amsmath} % for \text command
 \input{assignment.sty}
 
 \begin{document}
@@ -18,13 +18,22 @@ related to the preliminary design of a thermal energy storage.
 The project is divided into four tasks, the solution of each of which is
 described in detail below.
 
+
+\begin{equation}
+    \epsilon \rho_f C_f \frac{\partial T_f}{\partial t} + \epsilon \rho_f C u_f(t) \frac{\partial T_f}{\partial x} = \lambda_f \frac{\partial^2 T_f}{\partial x^2} - h_v(T_f - T_s) \quad \text{for} \quad x \in [0, L], \quad t \in [0, T],
+\end{equation}
+
+\begin{equation}
+    (1 - \epsilon) \rho_s C_s \frac{\partial T_s}{\partial t} = \lambda_s \frac{\partial^2 T_s}{\partial x^2} + h_v(T_f - T_s) \quad \text{for} \quad x \in [0, L], \quad t \in [0, T],
+\end{equation}
+
 \section{Task 1:  PINNs for solving PDEs}
 
 \section{Task 2: PDE-Constrained Inverse Problem}
 
 \section{Task 3: Applied Regression}
 
-\section{Task 4 - Robustness of PINNs and Transferability (Optional)}
+\section{Task 4: Robustness of PINNs and Transferability (Optional)}
 
 
 \end{document}
