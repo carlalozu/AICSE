@@ -69,8 +69,7 @@ class PINNTrainer:
 
     def convert(self, tens):
         """Function to linearly transform a tensor whose value are between 0 and 1
-        to a tensor whose values are between the domain extrema
-        """
+        to a tensor whose values are between the domain extrema"""
         assert tens.shape[1] == self.domain_extrema.shape[0]
         return (
             tens * (self.domain_extrema[:, 1] - self.domain_extrema[:, 0])
@@ -79,31 +78,34 @@ class PINNTrainer:
     def initial_condition(self, x):
         """Initial condition to solve the heat equation u0(x)=-sin(pi x)
         """
-        return torch.ones(x.shape) * self.t_hot
+        return torch.zeros((x.shape[0], 2)) + self.t_hot
 
     def exact_solution(self, inputs):
-        """Exact solution for the heat equation ut = u_xx with the IC above
+        """Exact solution for the heat equation ut = u_xx with the IC above.
+        This is placeholder, we do not have exact solution for this problem.
         """
         t = inputs[:, 0]
         x = inputs[:, 1]
 
         u = -torch.exp(-np.pi ** 2 * t) * torch.sin(np.pi * x)
-        return u
+        return torch.stack((u, u), dim=1)
 
     def add_temporal_boundary_points(self):
         """Function returning the input-output tensor required to
         assemble the training set S_tb corresponding to the temporal boundary.
+        TODO: Check correct implementation
         """
         t0 = self.domain_extrema[0, 0]
         input_tb = self.convert(self.soboleng.draw(self.n_tb))
         input_tb[:, 0] = torch.full(input_tb[:, 0].shape, t0)
-        output_tb = self.initial_condition(input_tb[:, 1]).reshape(-1, 1)
+        output_tb = self.initial_condition(input_tb[:, 1])
 
         return input_tb, output_tb
 
     def add_spatial_boundary_points(self):
         """Function returning the input-output tensor required to
         assemble the training set S_sb corresponding to the spatial boundary.
+        TODO: Check correct implementation
         """
         x0 = self.domain_extrema[1, 0]
 
@@ -112,7 +114,7 @@ class PINNTrainer:
         input_sb_0 = torch.clone(input_sb)
         input_sb_0[:, 1] = torch.full(input_sb_0[:, 1].shape, x0)
 
-        output_sb_0 = torch.zeros((input_sb.shape[0], 1))+self.t0
+        output_sb_0 = torch.zeros((input_sb.shape[0], 2)) + self.t0
 
         return (input_sb_0, output_sb_0)
 
@@ -163,6 +165,7 @@ class PINNTrainer:
         """Function to compute the PDE residuals"""
         input_int.requires_grad = True
         u = self.approximate_solution(input_int)
+        # TODO: Implement the computation of the PDE residual
         # `grad` computes the gradient of a SCALAR function `L` w.r.t
         # some input (n x m) tensor  [[x1, y1], ...,[xn ,yn]] (here `m` = 2).
         # it returns grad_L = [[dL/dx1, dL/dy1]...,[dL/dxn, dL/dyn]]
@@ -173,6 +176,12 @@ class PINNTrainer:
         # grad_u = [[dsum_u/dx1, dsum_u/dy1],[dsum_u/dx2, dsum_u/dy2], ...]
         # and dsum_u/dxi = d(u1 + u2 + u3 + u4 + ... + un) /dxi ==
         #  d(u(x1) + u(x2) u3(x3) + u4(x4) + ... + u(xn))/dxi == dui / dxi.
+
+        tf = input_int[:,2]
+        ts = input_int[:,3]
+
+        u_tf = u[:,0]
+        u_ts = u[:,1]
 
         # compute `grad_u` w.r.t (t, x) (time + 1D space).
         grad_u = torch.autograd.grad(
@@ -199,6 +208,7 @@ class PINNTrainer:
         u_pred_sb = self.eval_boundary_conditions(inp_train_sb)
         u_pred_tb = self.eval_initial_condition(inp_train_tb)
 
+        # Check dimensions
         assert u_pred_sb.shape[1] == u_train_sb.shape[1]
         assert u_pred_tb.shape[1] == u_train_tb.shape[1]
 
@@ -228,8 +238,7 @@ class PINNTrainer:
         return loss
 
     def fit(self, num_epochs, verbose):
-        """Function to fit the PINN
-        """
+        """Function to fit the PINN"""
         history = []
         inp_train_sb = None
         u_train_sb = None
@@ -273,30 +282,38 @@ class PINNTrainer:
         return history
 
     def plot(self):
-        """Create plot
-        """
+        """Create plot"""
         inputs = self.soboleng.draw(100000)
 
-        output = self.approximate_solution(inputs).reshape(-1, )
-        exact_output = self.exact_solution(inputs).reshape(-1, )
+        output = self.approximate_solution(inputs)
+        exact_output = self.exact_solution(inputs)
 
-        _, axs = plt.subplots(1, 2, figsize=(16, 8), dpi=150)
-        im1 = axs[0].scatter(
-            inputs[:, 1].detach(), inputs[:, 0].detach(),
-            c=exact_output.detach(), cmap="jet")
-        axs[0].set_xlabel("x")
-        axs[0].set_ylabel("t")
-        plt.colorbar(im1, ax=axs[0])
-        axs[0].grid(True, which="both", ls=":")
-        im2 = axs[1].scatter(
-            inputs[:, 1].detach(), inputs[:, 0].detach(), c=output.detach(),
-            cmap="jet")
-        axs[1].set_xlabel("x")
-        axs[1].set_ylabel("t")
-        plt.colorbar(im2, ax=axs[1])
-        axs[1].grid(True, which="both", ls=":")
-        axs[0].set_title("Exact Solution")
-        axs[1].set_title("Approximate Solution")
+        labels = ["T_f", "T_s"]
+        _, axs = plt.subplots(2, 2, figsize=(16, 8), dpi=150)
+        for i in range(2):
+            im1 = axs[i][0].scatter(
+                inputs[:, 1].detach(),
+                inputs[:, 0].detach(),
+                c=exact_output[:,i].detach(),
+                cmap="jet"
+            )
+            axs[i][0].set_xlabel("x")
+            axs[i][0].set_ylabel("t")
+            plt.colorbar(im1, ax=axs[i][0])
+            axs[i][0].grid(True, which="both", ls=":")
+            axs[i][0].set_title(f"Exact Solution {labels[i]}")
+
+            im2 = axs[i][1].scatter(
+                inputs[:, 1].detach(),
+                inputs[:, 0].detach(),
+                c=output[:,i].detach(),
+                cmap="jet"
+            )
+            axs[i][1].set_xlabel("x")
+            axs[i][1].set_ylabel("t")
+            plt.colorbar(im2, ax=axs[i][1])
+            axs[i][1].grid(True, which="both", ls=":")
+            axs[i][1].set_title(f"Approximate Solution {labels[i]}")
 
         plt.show()
 
