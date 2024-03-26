@@ -13,16 +13,29 @@ class PINNTrainer:
     """Trainer for the Physics-Informed Neural Network (PINN) for the heat equation.
     """
 
-    def __init__(self, n_sb_, n_tb_):
+    def __init__(self, n_sb_, n_tb_, alpha_f, h_f,
+                t_hot, u_f, alpha_s, h_s, t0):
+        """Initialize the PINN trainer."""
+        # Number of spatial and temporal boundary points
         self.n_sb = n_sb_
         self.n_tb = n_tb_
 
-        # Extrema of the solution domain (t, x) in [0,0.1] x [-1,1]
-        self.domain_extrema = torch.tensor([[0, 0.6],  # Time dimension
-                                            [-1, 1]])  # Space dimension
+        # Parameters of the reaction-convection-diffusion equation
+        self.alpha_f = alpha_f
+        self.h_f = h_f
+        self.t_hot = t_hot
+        self.u_f = u_f
+        self.alpha_s = alpha_s
+        self.h_s = h_s
+        self.t0 = t0
+
+        # Extrema of the solution domain (t, x) in [0,1] x [0,1]
+        self.domain_extrema = torch.tensor([[0, 1],  # Time dimension
+                                            [0, 1]])  # Space dimension
 
         # Number of space dimensions
         self.space_dimensions = 1
+        self.time_dimensions = 1
 
         # Parameter to balance role of data and PDE
         self.lambda_u = 10
@@ -31,11 +44,12 @@ class PINNTrainer:
         # Write the `NNAnsatz` class to be a feed-forward neural net
         # that you'll train to approximate your solution.
         # check values of parameters
-        self.approximate_solution = NNAnsatz(input_dimension=self.space_dimensions+1,
-                                             output_dimension=self.space_dimensions,
-                                             n_hidden_layers=1,
-                                             hidden_size=100,
-                                             )
+        self.approximate_solution = NNAnsatz(
+            input_dimension=self.space_dimensions+self.time_dimensions,
+            output_dimension=self.space_dimensions*2,
+            n_hidden_layers=1,
+            hidden_size=100,
+        )
 
         # Setup optimizer.
         self.optimizer = torch.optim.LBFGS(
@@ -65,7 +79,7 @@ class PINNTrainer:
     def initial_condition(self, x):
         """Initial condition to solve the heat equation u0(x)=-sin(pi x)
         """
-        return -torch.sin(np.pi * x)
+        return torch.ones(x.shape) * self.t_hot
 
     def exact_solution(self, inputs):
         """Exact solution for the heat equation ut = u_xx with the IC above
@@ -92,31 +106,23 @@ class PINNTrainer:
         assemble the training set S_sb corresponding to the spatial boundary.
         """
         x0 = self.domain_extrema[1, 0]
-        xL = self.domain_extrema[1, 1]
 
         input_sb = self.convert(self.soboleng.draw(self.n_sb))
 
         input_sb_0 = torch.clone(input_sb)
         input_sb_0[:, 1] = torch.full(input_sb_0[:, 1].shape, x0)
 
-        input_sb_L = torch.clone(input_sb)
-        input_sb_L[:, 1] = torch.full(input_sb_L[:, 1].shape, xL)
+        output_sb_0 = torch.zeros((input_sb.shape[0], 1))+self.t0
 
-        output_sb_0 = torch.zeros((input_sb.shape[0], 1))
-        output_sb_L = torch.zeros((input_sb.shape[0], 1))
-
-        return (
-            torch.cat([input_sb_0, input_sb_L], 0),
-            torch.cat([output_sb_0, output_sb_L], 0)
-        )
+        return (input_sb_0, output_sb_0)
 
     def add_interior_points(self):
         """Function returning the input-output tensor required to assemble
         the training set S_int corresponding to the interior domain
         where the PDE is enforced.
         """
-        input_int  = torch.Tensor(self.data_train[:,0:2])
-        output_int = torch.Tensor(self.data_train[:,2:4])
+        input_int  = torch.Tensor(self.data_train[:, 0:2])
+        output_int = torch.Tensor(self.data_train[:, 2:4])
         return input_int, output_int
 
     def assemble_datasets(self):
@@ -270,7 +276,6 @@ class PINNTrainer:
         """Create plot
         """
         inputs = self.soboleng.draw(100000)
-        inputs = self.convert(inputs)
 
         output = self.approximate_solution(inputs).reshape(-1, )
         exact_output = self.exact_solution(inputs).reshape(-1, )
