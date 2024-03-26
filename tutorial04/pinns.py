@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 from neural_net import NeuralNet
 from utils import initial_condition, exact_solution, source
 
-class InversePinns:
+class Pinns:
     """Class to solve an inverse problem using physics-informed neural network (PINN)"""
     def __init__(self, n_int_, n_sb_, n_tb_):
         self.n_int = n_int_
@@ -117,9 +117,9 @@ class InversePinns:
         torch.random.manual_seed(42)
 
         ##########################################
-        # TODO: Define the input-output tensor required to assemble the training
-        t = None
-        x = None
+        # Define the input-output tensor required to assemble the training
+        t = torch.linspace(0, 0.001, self.n_sensor)
+        x = torch.rand(self.n_sensor) * 2 - 1
 
         ##########################################
 
@@ -154,14 +154,7 @@ class InversePinns:
 
     def apply_boundary_conditions(self, input_sb):
         """Compute the terms required in the definition of the SPATIAL boundary residual"""
-
-        ##############
-        # TODO
-
-        u_pred_sb = None
-
-        ##############
-
+        u_pred_sb = self.approximate_solution(input_sb)
         return u_pred_sb
 
     def compute_pde_residual(self, input_int):
@@ -187,10 +180,11 @@ class InversePinns:
         grad_u_x = grad_u[:, 1]
 
         ##############
-        # TODO: Compute the second derivative (HINT: Pay attention to the
+        # Compute the second derivative (HINT: Pay attention to the
         # dimensions! --> torch.autograd.grad(..., ..., ...)[...][...]
         ##############
-        grad_u_xx = None
+        grad_u_xx = torch.autograd.grad(
+            grad_u_x, input_int, grad_outputs=torch.ones_like(grad_u_x), create_graph=True)[0][:, 1]
 
         ##############
 
@@ -214,18 +208,26 @@ class InversePinns:
         assert u_pred_meas.shape[1] == u_train_meas.shape[1]
 
         ##############
-        # TODO: Define respective resiudals and loss values
-        ##############
+        # Define respective resiudals and loss values
 
-        r_int = None
-        r_sb = None
-        r_tb = None
-        r_meas = None
+        # Compute interior PDE residual.
+        r_int = self.compute_pde_residual(inp_train_int)
 
-        loss_sb = None
-        loss_tb = None
-        loss_int = None
-        loss_meas = None
+        # Compute spatial boundary residual.
+        r_sb = (u_pred_sb - u_train_sb).reshape(-1,)
+
+        # Compute temporal boundary residual
+        r_tb = (u_pred_tb - u_train_tb).reshape(-1,)
+
+        # Compute measurement residual
+        r_meas = (u_pred_meas - u_train_meas).reshape(-1,)
+
+
+        # Compute losses based on these residuals. Integrate using quadrature rule
+        loss_sb = (r_sb*r_sb).mean()
+        loss_tb = (r_tb*r_tb).mean()
+        loss_int = (r_int*r_int).mean()
+        loss_meas = (r_meas*r_meas).mean()
 
         ##############
 

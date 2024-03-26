@@ -42,7 +42,10 @@ class NeuralNet(nn.Module):
         ##############
         # Implement forward pass through the network
         x = self.input_layer(x)
-        x = self.hidden_layers(x)
+        x = self.activation(x)
+        for hidden_layer in self.hidden_layers:
+            x = hidden_layer(x)
+            x = self.activation(x)
         x = self.output_layer(x)
         ##############
 

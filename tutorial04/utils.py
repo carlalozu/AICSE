@@ -31,7 +31,15 @@ def source(inputs):
 
 
 def fit(model, num_epochs, optimizer, verbose=True):
-    history = list()
+    """Function to fit the PINN"""
+    history = []
+    inp_train_sb = None
+    u_train_sb = None
+    inp_train_tb = None
+    u_train_tb = None
+    inp_train_int = None
+
+    history = []
 
     # Loop over epochs
     for epoch in range(num_epochs):
@@ -39,7 +47,17 @@ def fit(model, num_epochs, optimizer, verbose=True):
             print("################################ ",
                   epoch, " ################################")
 
-        for (inp_train_sb, u_train_sb), (inp_train_tb, u_train_tb), (inp_train_int, _) in zip(model.training_set_sb, model.training_set_tb, model.training_set_int):
+        for inputs_and_outputs in zip(
+            model.training_set_sb,
+            model.training_set_tb,
+            model.training_set_int
+        ):
+            (
+                (inp_train_sb, u_train_sb),
+                (inp_train_tb, u_train_tb),
+                (inp_train_int, _)
+            ) = inputs_and_outputs
+
             def closure():
                 optimizer.zero_grad()
                 loss = model.compute_loss(
