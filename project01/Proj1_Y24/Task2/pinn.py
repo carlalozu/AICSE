@@ -31,7 +31,7 @@ class PINNTrainer:
         self.T_cold = T_cold
 
         # Extrema of the solution domain (t, x) in [0,8] x [0,1]
-        self.domain_extrema = torch.tensor([[0, 8],  # Time dimension
+        self.domain_extrema = torch.tensor([[0, 1],  # Time dimension
                                             [0, 1]])  # Space dimension
 
         # Number of space dimensions
@@ -58,7 +58,7 @@ class PINNTrainer:
         self.optimizer = torch.optim.LBFGS(
             self.approximate_solution.parameters(),
             lr=float(0.5),
-            max_iter=100,
+            max_iter=10000,
             max_eval=10000,
             history_size=150,
             line_search_fn="strong_wolfe",
@@ -82,7 +82,7 @@ class PINNTrainer:
 
     def initial_condition(self, x):
         """Initial condition to solve the equation at t=0"""
-        return torch.zeros((x.shape[0], self.output_dimensions)) + self.T0
+        return torch.zeros((x.shape[0], 1)) + self.T0
 
     def exact_solution(self, inputs):
         """Exact solution for the heat equation"""
@@ -105,16 +105,23 @@ class PINNTrainer:
         # TODO: Think about logic on measurements
         """
         data = pd.read_csv('DataSolution.txt', sep=",", header=0)
+        t0 = self.domain_extrema[0][0].item()
+        tf = self.domain_extrema[0][1].item()
+        data_filtered = data[(data['t'] < tf) & (data['t'] > t0)]
 
         # Extract the data
-        t = torch.tensor(data['t'].unique(), dtype=torch.float)
-        x = torch.tensor(data['x'].unique(), dtype=torch.float)
+        x = torch.tensor(data_filtered['x'].unique(), dtype=torch.float)
+        t = torch.tensor(data_filtered['t'].unique(), dtype=torch.float)
 
         # Define the input-output tensor required to assemble the training
-        input_meas = torch.cartesian_prod(t, x)
-        output_meas = torch.tensor(data['tf'].values, dtype=torch.float)
+        input_meas = torch.cartesian_prod(x, t)
+        output_meas = torch.tensor(data_filtered['tf'].values, dtype=torch.float)
 
-        return input_meas, output_meas
+        input_meas_ = torch.zeros(input_meas.shape)
+        input_meas_[:,0] = input_meas[:,1] # t in position 0
+        input_meas_[:,1] = input_meas[:,0] # x in position 1
+
+        return input_meas_, output_meas
 
     def add_spatial_boundary_points(self):
         """Function returning the input-output tensor required to
@@ -132,13 +139,11 @@ class PINNTrainer:
         input_sb_L = torch.clone(input_sb)
         input_sb_L[:, 1] = torch.full(input_sb_L[:, 1].shape, xL)
 
-        # spatial boundary condition for Ts and Tf at x=0
-        output_sb_0 = torch.zeros((input_sb.shape[0], self.output_dimensions))
         # spatial boundary condition for Tf at x=0
-        output_sb_0[:, 0] = torch.zeros(input_sb.shape[0]) + self.T_hot
+        output_sb_0 = torch.zeros(input_sb.shape[0]) + self.T_hot
 
-        # spatial boundary condition for Ts and Tf at x=L
-        output_sb_L = torch.zeros((input_sb.shape[0], self.output_dimensions))
+        # spatial boundary condition for Tf at x=L
+        output_sb_L = torch.zeros(input_sb.shape[0])
 
         return (
             torch.cat([input_sb_0, input_sb_L], 0),
@@ -150,7 +155,7 @@ class PINNTrainer:
         the training set S_int corresponding to the interior domain
         where the PDE is enforced."""
         input_int = self.convert(self.soboleng.draw(self.n_int))
-        output_int = torch.zeros((input_int.shape[0], self.output_dimensions))
+        output_int = torch.zeros((input_int.shape[0], 1))
         return input_int, output_int
 
     def assemble_datasets(self):
@@ -193,11 +198,7 @@ class PINNTrainer:
         grad_u_tf_x = torch.cat(
             [u_pred_sb[: int(len(u_pred_sb) / 2), 0], grad_u_tf_x], 0)
 
-        grad_u_ts = torch.autograd.grad(
-            u_pred_sb[:, 1].sum(), input_sb, create_graph=True)[0]
-        grad_u_ts_x = grad_u_ts[:, 1]
-
-        return torch.stack((grad_u_tf_x, grad_u_ts_x), dim=1)
+        return grad_u_tf_x
 
     def compute_pde_residual(self, input_int):
         """Function to compute the PDE residuals"""
@@ -234,20 +235,20 @@ class PINNTrainer:
         u_pred_meas = self.approximate_solution(inp_train_meas)
 
         # Check dimensions
-        assert u_pred_sb.shape[1] == u_train_sb.shape[1]
-        assert u_pred_tb.shape[1] == u_train_tb.shape[1]
+        assert u_pred_sb.shape[0] == u_train_sb.shape[0]
+        assert u_pred_tb.shape[0] == u_train_tb.shape[0]
         assert u_pred_meas.shape[0] == u_train_meas.shape[0]
 
         r_int = self.compute_pde_residual(inp_train_int)
 
-        # Compute spatial boundary residual.
-        r_sb = (u_pred_sb - u_train_sb).reshape(-1,)
+        # Compute spatial boundary residual only on Tf
+        r_sb = u_pred_sb - u_train_sb
 
-        # Compute temporal boundary residual
-        r_tb = (u_pred_tb - u_train_tb).reshape(-1,)
+        # Compute temporal boundary residual only on Tf
+        r_tb = u_pred_tb - u_train_tb
 
-        # Compute measurement residual
-        r_meas = (u_pred_meas[:,0] - u_train_meas).reshape(-1,)
+        # Compute measurement residual only on Tf
+        r_meas = u_pred_meas[:,0] - u_train_meas
 
         # Compute losses based on these residuals. Integrate using quadrature rule
         loss_sb = torch.mean(abs(r_sb)**2)
@@ -316,32 +317,18 @@ class PINNTrainer:
         output = self.approximate_solution(inputs)
 
         labels = ["T_f", "T_s"]
-        _ , axs = plt.subplots(1, 3, figsize=(16, 6), dpi=150)
+        _ , axs = plt.subplots(1, 2, figsize=(16, 6), dpi=100)
 
         for i in range(2):
             im = axs[i].scatter(
-                inputs[:, 1].detach(),
                 inputs[:, 0].detach(),
+                inputs[:, 1].detach(),
                 c=output[:, i].detach(),
                 cmap="jet",
-                clim=(1, 4)
             )
-            axs[i].set_xlabel("x")
-            axs[i].set_ylabel("t")
+            axs[i].set_xlabel("t")
+            axs[i].set_ylabel("x")
             axs[i].grid(True, which="both", ls=":")
             axs[i].set_title(f"Approximate Solution {labels[i]}")
-
-        im = axs[i].scatter(
-            inputs[:, 1].detach(),
-            inputs[:, 0].detach(),
-            c=output[:, i].detach(),
-            cmap="jet",
-            clim=(1, 4)
-        )
-        axs[i].set_xlabel("x")
-        axs[i].set_ylabel("t")
-        axs[i].grid(True, which="both", ls=":")
-        axs[i].set_title(f"Approximate Solution {labels[i]}")
-
-        plt.colorbar(im, ax=axs)
+            plt.colorbar(im, ax=axs[i])
         plt.show()
