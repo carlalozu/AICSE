@@ -13,21 +13,22 @@ class PINNTrainer:
     """Trainer for the Physics-Informed Neural Network (PINN) for the heat equation.
     """
 
-    def __init__(self, n_sb_, n_tb_, alpha_f, h_f,
-                t_hot, u_f, alpha_s, h_s, t0):
+    def __init__(self, n_int_, n_sb_, n_tb_, alpha_f, h_f,
+                 T_hot, u_f, alpha_s, h_s, T0):
         """Initialize the PINN trainer."""
         # Number of spatial and temporal boundary points
+        self.n_int = n_int_
         self.n_sb = n_sb_
         self.n_tb = n_tb_
 
         # Parameters of the reaction-convection-diffusion equation
         self.alpha_f = alpha_f
         self.h_f = h_f
-        self.t_hot = t_hot
+        self.T_hot = T_hot
         self.u_f = u_f
         self.alpha_s = alpha_s
         self.h_s = h_s
-        self.t0 = t0
+        self.T0 = T0
 
         # Extrema of the solution domain (t, x) in [0,1] x [0,1]
         self.domain_extrema = torch.tensor([[0, 1],  # Time dimension
@@ -36,6 +37,7 @@ class PINNTrainer:
         # Number of space dimensions
         self.space_dimensions = 1
         self.time_dimensions = 1
+        self.output_dimensions = 2
 
         # Parameter to balance role of data and PDE
         self.lambda_u = 10
@@ -47,7 +49,7 @@ class PINNTrainer:
         self.approximate_solution = NNAnsatz(
             input_dimension=self.space_dimensions+self.time_dimensions,
             output_dimension=self.space_dimensions*2,
-            n_hidden_layers=1,
+            n_hidden_layers=4,
             hidden_size=100,
         )
 
@@ -58,10 +60,6 @@ class PINNTrainer:
         # Generator of Sobol sequences.
         self.soboleng = torch.quasirandom.SobolEngine(
             dimension=self.domain_extrema.shape[0])
-
-        # Load training data
-        self.data_train = np.genfromtxt('SubExample.csv', delimiter=',', skip_header=1)
-        self.n_int = self.data_train.shape[0]
 
         # Training sets S_sb, S_tb, S_int as torch dataloader
         self.training_set_sb, self.training_set_tb, self.training_set_int = (
@@ -76,19 +74,19 @@ class PINNTrainer:
             + self.domain_extrema[:, 0])
 
     def initial_condition(self, x):
-        """Initial condition to solve the heat equation u0(x)=-sin(pi x)
+        """Initial condition to solve the equation at t=0
         """
-        return torch.zeros((x.shape[0], 2)) + self.t_hot
+        return torch.zeros((x.shape[0], self.output_dimensions)) + self.T0
 
-    def exact_solution(self, inputs):
-        """Exact solution for the heat equation ut = u_xx with the IC above.
-        This is placeholder, we do not have exact solution for this problem.
-        """
-        t = inputs[:, 0]
-        x = inputs[:, 1]
-
-        u = -torch.exp(-np.pi ** 2 * t) * torch.sin(np.pi * x)
-        return torch.stack((u, u), dim=1)
+#     def exact_solution(self, inputs):
+#         """Exact solution for the heat equation ut = u_xx with the IC above.
+#         This is placeholder, we do not have exact solution for this problem.
+#         """
+#         t = inputs[:, 0]
+#         x = inputs[:, 1]
+#
+#         u = -torch.exp(-np.pi ** 2 * t) * torch.sin(np.pi * x)
+#         return torch.stack((u, u), dim=1)
 
     def add_temporal_boundary_points(self):
         """Function returning the input-output tensor required to
@@ -108,23 +106,38 @@ class PINNTrainer:
         TODO: Check correct implementation
         """
         x0 = self.domain_extrema[1, 0]
+        xL = self.domain_extrema[1, 1]
 
         input_sb = self.convert(self.soboleng.draw(self.n_sb))
 
         input_sb_0 = torch.clone(input_sb)
         input_sb_0[:, 1] = torch.full(input_sb_0[:, 1].shape, x0)
 
-        output_sb_0 = torch.zeros((input_sb.shape[0], 2)) + self.t0
+        input_sb_L = torch.clone(input_sb)
+        input_sb_L[:, 1] = torch.full(input_sb_L[:, 1].shape, xL)
 
-        return (input_sb_0, output_sb_0)
+        # spatial boundary condition for Ts and Tf at x=0
+        output_sb_0 = torch.zeros((input_sb.shape[0], self.output_dimensions))
+        # spatial boundary condition for Tf at x=0
+        output_sb_0[:, 0] = (self.T_hot-self.T0) / \
+            (1+np.exp(-200*(input_sb_0[:, 0]-0.25)) + self.T0)
+
+        # spatial boundary condition for Ts and Tf at x=L
+        output_sb_L = torch.zeros((input_sb.shape[0], self.output_dimensions))
+
+        return (
+            torch.cat([input_sb_0, input_sb_L], 0),
+            torch.cat([output_sb_0, output_sb_L], 0)
+        )
 
     def add_interior_points(self):
         """Function returning the input-output tensor required to assemble
         the training set S_int corresponding to the interior domain
         where the PDE is enforced.
+        TODO: Change this
         """
-        input_int  = torch.Tensor(self.data_train[:, 0:2])
-        output_int = torch.Tensor(self.data_train[:, 2:4])
+        input_int = self.convert(self.soboleng.draw(self.n_int))
+        output_int = torch.zeros((input_int.shape[0], self.output_dimensions))
         return input_int, output_int
 
     def assemble_datasets(self):
@@ -165,7 +178,6 @@ class PINNTrainer:
         """Function to compute the PDE residuals"""
         input_int.requires_grad = True
         u = self.approximate_solution(input_int)
-        # TODO: Implement the computation of the PDE residual
         # `grad` computes the gradient of a SCALAR function `L` w.r.t
         # some input (n x m) tensor  [[x1, y1], ...,[xn ,yn]] (here `m` = 2).
         # it returns grad_L = [[dL/dx1, dL/dy1]...,[dL/dxn, dL/dyn]]
@@ -177,28 +189,38 @@ class PINNTrainer:
         # and dsum_u/dxi = d(u1 + u2 + u3 + u4 + ... + un) /dxi ==
         #  d(u(x1) + u(x2) u3(x3) + u4(x4) + ... + u(xn))/dxi == dui / dxi.
 
-        tf = input_int[:,2]
-        ts = input_int[:,3]
-
-        u_tf = u[:,0]
-        u_ts = u[:,1]
-
         # compute `grad_u` w.r.t (t, x) (time + 1D space).
-        grad_u = torch.autograd.grad(
-            u, input_int, grad_outputs=torch.ones_like(u), create_graph=True)[0]
+        grad_u_tf = torch.autograd.grad(
+            u[:, 0], input_int, grad_outputs=torch.ones_like(u[:, 0]), create_graph=True)[0]
+
+        grad_u_ts = torch.autograd.grad(
+            u[:, 1], input_int, grad_outputs=torch.ones_like(u[:, 1]), create_graph=True)[0]
 
         # Extract time and space derivative at all input points.
-        grad_u_t = grad_u[:, 0]
-        grad_u_x = grad_u[:, 1]
+        grad_u_tf_t = grad_u_tf[:, 0]
+        grad_u_tf_x = grad_u_tf[:, 1]
+
+        grad_u_ts_t = grad_u_ts[:, 0]
+        grad_u_ts_x = grad_u_ts[:, 1]
 
         # Compute `grads` again across the spatial dimension --
         # here you should reuse something you just computed.
-        grad_u_xx = torch.autograd.grad(
-            grad_u_x, input_int, grad_outputs=torch.ones_like(grad_u_x), create_graph=True)[0][:, 1]
+        grad_u_tf_xx = torch.autograd.grad(
+            grad_u_tf_x, input_int,
+            grad_outputs=torch.ones_like(grad_u_tf_x), create_graph=True)[0][:, 1]
 
-        # Compute the residual term you're getting.
-        residual = grad_u_t - grad_u_xx
-        return residual.reshape(-1,)
+        grad_u_ts_xx = torch.autograd.grad(
+            grad_u_ts_x, input_int,
+            grad_outputs=torch.ones_like(grad_u_ts_x), create_graph=True)[0][:, 1]
+
+        # Residual of the PDE
+        residual_tf = grad_u_tf_t + self.u_f * grad_u_tf_x - \
+            self.alpha_f * grad_u_tf_xx + self.h_f * (u[:, 0] - u[:, 1])
+
+        residual_ts = grad_u_ts_t - \
+            self.alpha_s*grad_u_ts_xx - self.h_s * (u[:, 0] - u[:, 1])
+
+        return torch.stack((residual_tf, residual_ts), dim=1)
 
     def compute_loss(
         self, inp_train_sb, u_train_sb,
@@ -286,38 +308,37 @@ class PINNTrainer:
         inputs = self.soboleng.draw(100000)
 
         output = self.approximate_solution(inputs)
-        exact_output = self.exact_solution(inputs)
 
         labels = ["T_f", "T_s"]
-        _, axs = plt.subplots(2, 2, figsize=(16, 8), dpi=150)
-        for i in range(2):
-            im1 = axs[i][0].scatter(
-                inputs[:, 1].detach(),
-                inputs[:, 0].detach(),
-                c=exact_output[:,i].detach(),
-                cmap="jet"
-            )
-            axs[i][0].set_xlabel("x")
-            axs[i][0].set_ylabel("t")
-            plt.colorbar(im1, ax=axs[i][0])
-            axs[i][0].grid(True, which="both", ls=":")
-            axs[i][0].set_title(f"Exact Solution {labels[i]}")
+        _, axs = plt.subplots(1, 2, figsize=(16, 6), dpi=150)
 
-            im2 = axs[i][1].scatter(
-                inputs[:, 1].detach(),
-                inputs[:, 0].detach(),
-                c=output[:,i].detach(),
-                cmap="jet"
-            )
-            axs[i][1].set_xlabel("x")
-            axs[i][1].set_ylabel("t")
-            plt.colorbar(im2, ax=axs[i][1])
-            axs[i][1].grid(True, which="both", ls=":")
-            axs[i][1].set_title(f"Approximate Solution {labels[i]}")
+        im1 = axs[0].scatter(
+            inputs[:, 1].detach(),
+            inputs[:, 0].detach(),
+            c=output[:, 0].detach(),
+            cmap="jet"
+        )
+        axs[0].set_xlabel("x")
+        axs[0].set_ylabel("t")
+        plt.colorbar(im1, ax=axs[0])
+        axs[0].grid(True, which="both", ls=":")
+        axs[0].set_title(f"Approximate Solution {labels[0]}")
+
+        im2 = axs[1].scatter(
+            inputs[:, 1].detach(),
+            inputs[:, 0].detach(),
+            c=output[:, 1].detach(),
+            cmap="jet"
+        )
+        axs[1].set_xlabel("x")
+        axs[1].set_ylabel("t")
+        plt.colorbar(im2, ax=axs[1])
+        axs[1].grid(True, which="both", ls=":")
+        axs[1].set_title(f"Approximate Solution {labels[1]}")
 
         plt.show()
 
-        err = (
-            torch.mean((output - exact_output) ** 2) /
-            torch.mean(exact_output ** 2)) ** 0.5 * 100
-        print("L2 Relative Error Norm: ", err.item(), "%")
+        # err = (
+        #     torch.mean((output - exact_output) ** 2) /
+        #     torch.mean(exact_output ** 2)) ** 0.5 * 100
+        # print("L2 Relative Error Norm: ", err.item(), "%")
