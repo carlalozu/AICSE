@@ -1,4 +1,4 @@
-"""Physics-Informed Neural Networks (PINNs) for the heat equation."""
+"""Physics-Informed Neural Networks (PINNs) for the reaction-convection-diffusion equation."""
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
@@ -10,8 +10,8 @@ torch.manual_seed(128)
 
 
 class PINNTrainer:
-    """Trainer for the Physics-Informed Neural Network (PINN) for the heat equation.
-    """
+    """Trainer for the Physics-Informed Neural Network (PINN) for the 
+    reaction-convection-diffusion equation"""
 
     def __init__(self, n_int_, n_sb_, n_tb_, alpha_f, h_f,
                  T_hot, u_f, alpha_s, h_s, T0):
@@ -21,7 +21,7 @@ class PINNTrainer:
         self.n_sb = n_sb_
         self.n_tb = n_tb_
 
-        # Parameters of the reaction-convection-diffusion equation
+        # Parameters
         self.alpha_f = alpha_f
         self.h_f = h_f
         self.T_hot = T_hot
@@ -37,14 +37,12 @@ class PINNTrainer:
         # Number of space dimensions
         self.space_dimensions = 1  # x
         self.time_dimensions = 1   # t
-        self.output_dimensions = 2 # Ts and Tf
+        self.output_dimensions = 2  # Ts and Tf
 
         # Parameter to balance role of data and PDE
         self.lambda_u = 10
 
         # F Dense NN to approximate the solution of the underlying equation
-        # Write the `NNAnsatz` class to be a feed-forward neural net
-        # that you'll train to approximate your solution.
         self.approximate_solution = NNAnsatz(
             input_dimension=self.space_dimensions+self.time_dimensions,
             output_dimension=self.space_dimensions*2,
@@ -81,7 +79,6 @@ class PINNTrainer:
     def initial_condition(self, x):
         """Initial condition to solve the equation at t=0"""
         return torch.zeros((x.shape[0], self.output_dimensions)) + self.T0
-
 
     def add_temporal_boundary_points(self):
         """Function returning the input-output tensor required to
@@ -120,7 +117,6 @@ class PINNTrainer:
         # spatial boundary condition for Tf at x=0 (Dirichlet boundary condition)
         output_sb_0[:, 0] = (self.T_hot-self.T0) / \
             (1+torch.exp(-200*(input_sb_0[:, 0]-0.25))) + self.T0
-
 
         return (
             torch.cat([input_sb_0, input_sb_L], 0),
@@ -162,7 +158,7 @@ class PINNTrainer:
 
     @staticmethod
     def get_derivative(u, x):
-        """Compute the first derivative of u w.r.t x"""
+        """Compute the derivative of u w.r.t x"""
         grad_u = torch.autograd.grad(
             u, x,
             grad_outputs=torch.ones_like(u),
@@ -172,7 +168,7 @@ class PINNTrainer:
     def eval_boundary_conditions(self, input_sb):
         """Function to compute the terms required in the definition
         of the SPATIAL boundary residual."""
-        input_sb.requires_grad = True 
+        input_sb.requires_grad = True
         u_pred_sb = self.approximate_solution(input_sb)
 
         # Get derivative to compare against 0 set in the spatial boundary conditions
@@ -319,7 +315,7 @@ class PINNTrainer:
         output = self.approximate_solution(inputs)
 
         labels = ["T_f", "T_s"]
-        _ , axs = plt.subplots(1, 2, figsize=(16, 6), dpi=150)
+        _, axs = plt.subplots(1, 2, figsize=(16, 6), dpi=150)
 
         for i in range(2):
             im = axs[i].scatter(
