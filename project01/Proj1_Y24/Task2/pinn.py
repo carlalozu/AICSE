@@ -225,6 +225,30 @@ class PINNTrainer:
         # Enforce boundary conditions only on Tf
         return u_pred_tb[:, 0]
 
+    @staticmethod
+    def get_derivative(u, x):
+        """Compute the first derivative of u w.r.t x"""
+        grad_u = torch.autograd.grad(
+            u, x,
+            grad_outputs=torch.ones_like(u),
+            create_graph=True)[0]
+        return grad_u
+
+    def eval_boundary_conditions_charging(self, u, ux):
+        u0 = u
+        uL = ux
+        return u0, uL
+
+    def eval_boundary_conditions_discharging(self, u, ux):
+        u0 = ux
+        uL = u
+        return u0, uL
+
+    def eval_boundary_conditions_idle(self, u, ux):
+        u0 = ux
+        uL = ux
+        return u0, uL
+
     def eval_boundary_conditions(self, input_sb):
         """Function to compute the terms required in the definition
         of the SPATIAL boundary residual.
@@ -235,21 +259,36 @@ class PINNTrainer:
 
         # Leave as is to compare against value (Dirichlet boundary conditions)
         # To the first half of the points (x=0) for Tf
-        u_bound_sb = u_pred_sb[:self.n_sb, 0]
+        u_bound_sb = u_pred_sb[:, 0]
 
         # Get grad to compare derivative to 0 (Von Neumann boundary conditions)
         # Only to the second half of the points (x=L) for Tf
-        grad_u_tf = torch.autograd.grad(
-            u_pred_sb[self.n_sb:, 0], input_sb,
-            grad_outputs=torch.ones_like(u_pred_sb[self.n_sb:, 0]),
-            create_graph=True)[0]
-        grad_u_tf_x_L = grad_u_tf[self.n_sb:, 1]
+        grad_u_tf_x = self.get_derivative(u_pred_sb, input_sb)[:,1]
+
+        # Enforce boundary conditions depending on phase
+        u_bound_x0 = []
+        u_bound_xL = []
+        for i in range(self.n_time_periods):
+            lims = slice(i * self.n_sb_per_period, (i + 1) * self.n_sb_per_period)
+            u_bound_sb_ = u_bound_sb[lims]
+            grad_u_tf_x_ = grad_u_tf_x[lims]
+            if i % 2 == 1:
+                x0, xl = self.eval_boundary_conditions_idle(u_bound_sb_, grad_u_tf_x_)
+            elif i % 4 == 0:
+                x0, xl = self.eval_boundary_conditions_charging(u_bound_sb_, grad_u_tf_x_)
+            else:
+                x0, xl = self.eval_boundary_conditions_discharging(u_bound_sb_, grad_u_tf_x_)
+
+            u_bound_x0.append(x0)
+            u_bound_xL.append(xl)
 
         # Concat
-        u_bound_sb_tf = torch.cat(
-            [u_bound_sb, grad_u_tf_x_L], 0)
+        u_bound_x0 = torch.cat(u_bound_x0, 0)
+        u_bound_xL = torch.cat(u_bound_xL, 0)
 
-        return u_bound_sb_tf
+        assert u_bound_x0.shape[0] == self.n_sb
+
+        return torch.cat([u_bound_x0, u_bound_xL], 0)
 
     def compute_pde_residual(self, input_int):
         """Function to compute the PDE residuals
@@ -259,20 +298,14 @@ class PINNTrainer:
         u = self.approximate_solution(input_int)
 
         # compute `grad_u` w.r.t (t, x) (time + 1D space).
-        grad_u_tf = torch.autograd.grad(
-            u[:,0], input_int,
-            grad_outputs=torch.ones_like(u[:,0]),
-            create_graph=True)[0]
+        grad_u_tf = self.get_derivative(u[:,0], input_int)
 
         # Extract time and space derivative at all input points.
         grad_u_tf_t = grad_u_tf[:, 0]
         grad_u_tf_x = grad_u_tf[:, 1]
 
         # Compute `grads` again across the spatial dimension
-        grad_u_tf_xx = torch.autograd.grad(
-            grad_u_tf_x, input_int,
-            grad_outputs=torch.ones_like(grad_u_tf_x),
-            create_graph=True)[0][:, 1]
+        grad_u_tf_xx = self.get_derivative(grad_u_tf_x, input_int)[:, 1]
 
         # Residual of the PDE
         residual = grad_u_tf_t + self.u_f * grad_u_tf_x - \
