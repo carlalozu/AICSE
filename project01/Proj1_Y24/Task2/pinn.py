@@ -14,7 +14,7 @@ class PINNTrainer:
     """Trainer for the Physics-Informed Neural Network (PINN) for the heat equation.
     """
 
-    def __init__(self, n_int_, n_sb_, n_tb_, alpha_f, h_f,
+    def __init__(self, n_int_, n_sb_, n_tb_, t0, tf, alpha_f, h_f,
                  T_hot, u_f, T0, T_cold):
         """Initialize the PINN trainer."""
         # Number of spatial and temporal boundary points
@@ -32,16 +32,14 @@ class PINNTrainer:
         self.T_cold = T_cold
 
         # Extrema of the solution domain (t, x) in [0,8] x [0,1]
-        self.domain_extrema = torch.tensor([[0, 1],  # Time dimension
+        self.domain_extrema = torch.tensor([[t0, tf],  # Time dimension
                                             [0, 1]])  # Space dimension
 
         self.n_time_periods = self.domain_extrema[0,
                                                   1] - self.domain_extrema[0, 0]
         self.n_sb_per_period = self.n_sb // self.n_time_periods
 
-        for n in [n_int_, n_sb_, n_tb_]:
-            assert n % self.n_time_periods == 0, f"{n} must be multiple \
-                of number of time periods {self.n_time_periods}"
+        assert n_sb_ % self.n_time_periods == 0, f"n_sb_ must be multiple of time periods {self.n_time_periods}"
 
         # Number of space dimensions
         self.space_dimensions = 1
@@ -141,14 +139,14 @@ class PINNTrainer:
         output_sb_L = torch.zeros(self.n_sb_per_period)
         return output_sb_0, output_sb_L
 
-    def add_spatial_boundary_points_idle(self):
+    def add_spatial_boundary_points_discharging(self):
         # Tf at x=0
         output_sb_0 = torch.zeros(self.n_sb_per_period)
         # Tf at x=L
         output_sb_L = torch.zeros(self.n_sb_per_period) + self.T_cold
         return output_sb_0, output_sb_L
 
-    def add_spatial_boundary_points_discharging(self):
+    def add_spatial_boundary_points_idle(self):
         # Tf at x=0
         output_sb_0 = torch.zeros(self.n_sb_per_period)
         # Tf at x=L
@@ -158,7 +156,6 @@ class PINNTrainer:
     def add_spatial_boundary_points(self):
         """Function returning the input-output tensor required to
         assemble the training set S_sb corresponding to the spatial boundary.
-        # TODO: implement boundary points
         """
         x0 = self.domain_extrema[1, 0]
         xL = self.domain_extrema[1, 1]
@@ -172,30 +169,25 @@ class PINNTrainer:
         input_sb_L = torch.clone(input_sb)
         input_sb_L[:, 1] = torch.full(input_sb_L[:, 1].shape, xL)
 
-        # spatial boundary condition for Tf at x=0
-        output_sb_0 = torch.zeros(input_sb.shape[0]) + self.T_hot
 
-        # spatial boundary condition for Tf at x=L
-        output_sb_L = torch.zeros(input_sb.shape[0])
+        output_sb_0 = []
+        output_sb_L = []
+        for i in range(self.n_time_periods):
+            if i % 2 == 1:
+                output_sb = self.add_spatial_boundary_points_idle()
+            elif i % 4 == 0:
+                output_sb = self.add_spatial_boundary_points_charging()
+            else:
+                output_sb = self.add_spatial_boundary_points_discharging()
 
-#         output_sb_0 = []
-#         output_sb_L = []
-#         for i in range(self.n_time_periods):
-#             if i % 3 == 1:
-#                 output_sb = self.add_spatial_boundary_points_charging()
-#             elif i % 3 == 2:
-#                 output_sb = self.add_spatial_boundary_points_idle()
-#             else:
-#                 output_sb = self.add_spatial_boundary_points_discharging()
-# 
-#             output_sb_0.append(output_sb[0])
-#             output_sb_L.append(output_sb[1])
-# 
-#         output_sb_0 = torch.cat(output_sb_0, 0)
-#         output_sb_L = torch.cat(output_sb_L, 0)
-# 
-#         assert output_sb_0.shape[0] == self.n_sb
-#         assert output_sb_L.shape[0] == self.n_sb
+            output_sb_0.append(output_sb[0])
+            output_sb_L.append(output_sb[1])
+
+        output_sb_0 = torch.cat(output_sb_0, 0)
+        output_sb_L = torch.cat(output_sb_L, 0)
+
+        assert output_sb_0.shape[0] == self.n_sb
+        assert output_sb_L.shape[0] == self.n_sb
 
         return (
             torch.cat([input_sb_0, input_sb_L], 0),
