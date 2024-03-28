@@ -18,6 +18,7 @@ class PINNTrainer:
                  T_hot, u_f, T0, T_cold):
         """Initialize the PINN trainer."""
         # Number of spatial and temporal boundary points
+
         self.n_int = n_int_
         self.n_sb = n_sb_
         self.n_tb = n_tb_
@@ -33,6 +34,14 @@ class PINNTrainer:
         # Extrema of the solution domain (t, x) in [0,8] x [0,1]
         self.domain_extrema = torch.tensor([[0, 1],  # Time dimension
                                             [0, 1]])  # Space dimension
+
+        self.n_time_periods = self.domain_extrema[0,
+                                                  1] - self.domain_extrema[0, 0]
+        self.n_sb_per_period = self.n_sb // self.n_time_periods
+
+        for n in [n_int_, n_sb_, n_tb_]:
+            assert n % self.n_time_periods == 0, f"{n} must be multiple \
+                of number of time periods {self.n_time_periods}"
 
         # Number of space dimensions
         self.space_dimensions = 1
@@ -90,7 +99,8 @@ class PINNTrainer:
 
     def add_temporal_boundary_points(self):
         """Function returning the input-output tensor required to
-        assemble the training set S_tb corresponding to the temporal boundary.
+        assemble the training set S_tb corresponding to the temporal boundary
+        at t=0, all x.
         """
         t0 = self.domain_extrema[0, 0]
         input_tb = self.convert(self.soboleng.draw(self.n_tb))
@@ -115,13 +125,35 @@ class PINNTrainer:
 
         # Define the input-output tensor required to assemble the training
         input_meas = torch.cartesian_prod(x, t)
-        output_meas = torch.tensor(data_filtered['tf'].values, dtype=torch.float)
+        output_meas = torch.tensor(
+            data_filtered['tf'].values, dtype=torch.float)
 
         input_meas_ = torch.zeros(input_meas.shape)
-        input_meas_[:,0] = input_meas[:,1] # t in position 0
-        input_meas_[:,1] = input_meas[:,0] # x in position 1
+        input_meas_[:, 0] = input_meas[:, 1]  # t in position 0
+        input_meas_[:, 1] = input_meas[:, 0]  # x in position 1
 
         return input_meas_, output_meas
+
+    def add_spatial_boundary_points_charging(self):
+        # Tf at x=0
+        output_sb_0 = torch.zeros(self.n_sb_per_period) + self.T_hot
+        # Tf at x=L
+        output_sb_L = torch.zeros(self.n_sb_per_period)
+        return output_sb_0, output_sb_L
+
+    def add_spatial_boundary_points_idle(self):
+        # Tf at x=0
+        output_sb_0 = torch.zeros(self.n_sb_per_period)
+        # Tf at x=L
+        output_sb_L = torch.zeros(self.n_sb_per_period) + self.T_cold
+        return output_sb_0, output_sb_L
+
+    def add_spatial_boundary_points_discharging(self):
+        # Tf at x=0
+        output_sb_0 = torch.zeros(self.n_sb_per_period)
+        # Tf at x=L
+        output_sb_L = torch.zeros(self.n_sb_per_period)
+        return output_sb_0, output_sb_L
 
     def add_spatial_boundary_points(self):
         """Function returning the input-output tensor required to
@@ -133,7 +165,7 @@ class PINNTrainer:
 
         input_sb = self.convert(self.soboleng.draw(self.n_sb))
 
-        # Initialize data
+        # Set x = 0 and x = L for all t
         input_sb_0 = torch.clone(input_sb)
         input_sb_0[:, 1] = torch.full(input_sb_0[:, 1].shape, x0)
 
@@ -145,6 +177,25 @@ class PINNTrainer:
 
         # spatial boundary condition for Tf at x=L
         output_sb_L = torch.zeros(input_sb.shape[0])
+
+#         output_sb_0 = []
+#         output_sb_L = []
+#         for i in range(self.n_time_periods):
+#             if i % 3 == 1:
+#                 output_sb = self.add_spatial_boundary_points_charging()
+#             elif i % 3 == 2:
+#                 output_sb = self.add_spatial_boundary_points_idle()
+#             else:
+#                 output_sb = self.add_spatial_boundary_points_discharging()
+# 
+#             output_sb_0.append(output_sb[0])
+#             output_sb_L.append(output_sb[1])
+# 
+#         output_sb_0 = torch.cat(output_sb_0, 0)
+#         output_sb_L = torch.cat(output_sb_L, 0)
+# 
+#         assert output_sb_0.shape[0] == self.n_sb
+#         assert output_sb_L.shape[0] == self.n_sb
 
         return (
             torch.cat([input_sb_0, input_sb_L], 0),
@@ -174,27 +225,27 @@ class PINNTrainer:
 
         return training_set_sb, training_set_tb, training_set_int
 
-
     def eval_initial_condition(self, input_tb):
         """Function to compute the terms required in the definition of
         the temporal boundary residual.
         """
         u_pred_tb = self.approximate_solution(input_tb)
         # Enforce boundary conditions only on Tf
-        return u_pred_tb[:,0]
+        return u_pred_tb[:, 0]
 
     def eval_boundary_conditions(self, input_sb):
         """Function to compute the terms required in the definition
         of the SPATIAL boundary residual.
         TODO: Implement boundary conditions depending on phase
         """
-        input_sb.requires_grad = True 
+        input_sb.requires_grad = True
         u_pred_sb = self.approximate_solution(input_sb)
-
 
         # Apply Von Neumann boundary conditions
         grad_u_tf = torch.autograd.grad(
-            u_pred_sb[self.n_sb:, 0].sum(), input_sb, create_graph=True)[0]
+            u_pred_sb[self.n_sb:, 0], input_sb,
+            grad_outputs=torch.ones_like(u_pred_sb[self.n_sb:, 0]),
+            create_graph=True)[0]
 
         # Apply dirichlet to the points (x=0) for Tf
         u_bound_sb = torch.zeros(self.n_sb)+self.T_hot
@@ -215,7 +266,9 @@ class PINNTrainer:
 
         # compute `grad_u` w.r.t (t, x) (time + 1D space).
         grad_u_tf = torch.autograd.grad(
-            u[:,0].sum(), input_int, create_graph=True)[0]
+            u[:,0], input_int,
+            grad_outputs=torch.ones_like(u[:,0]),
+            create_graph=True)[0]
 
         # Extract time and space derivative at all input points.
         grad_u_tf_t = grad_u_tf[:, 0]
@@ -223,7 +276,9 @@ class PINNTrainer:
 
         # Compute `grads` again across the spatial dimension
         grad_u_tf_xx = torch.autograd.grad(
-            grad_u_tf_x.sum(), input_int, create_graph=True)[0][:, 1]
+            grad_u_tf_x, input_int,
+            grad_outputs=torch.ones_like(grad_u_tf_x),
+            create_graph=True)[0][:, 1]
 
         # Residual of the PDE
         residual = grad_u_tf_t + self.u_f * grad_u_tf_x - \
@@ -256,7 +311,7 @@ class PINNTrainer:
         r_tb = u_pred_tb - u_train_tb
 
         # Compute measurement residual only on Tf
-        r_meas = u_pred_meas[:,0] - u_train_meas
+        r_meas = u_pred_meas[:, 0] - u_train_meas
 
         # Compute losses based on these residuals. Integrate using quadrature rule
         loss_sb = torch.mean(abs(r_sb)**2)
@@ -325,7 +380,7 @@ class PINNTrainer:
         output = self.approximate_solution(inputs)
 
         labels = ["T_f", "T_s"]
-        _ , axs = plt.subplots(1, 2, figsize=(16, 6), dpi=100)
+        _, axs = plt.subplots(1, 2, figsize=(16, 6), dpi=100)
 
         for i in range(2):
             im = axs[i].scatter(
