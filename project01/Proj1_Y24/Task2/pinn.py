@@ -65,7 +65,7 @@ class PINNTrainer:
         self.optimizer = torch.optim.LBFGS(
             self.approximate_solution.parameters(),
             lr=float(0.5),
-            max_iter=10000,
+            max_iter=5000,
             max_eval=10000,
             history_size=150,
             line_search_fn="strong_wolfe",
@@ -233,16 +233,16 @@ class PINNTrainer:
         input_sb.requires_grad = True
         u_pred_sb = self.approximate_solution(input_sb)
 
-        # Apply Von Neumann boundary conditions
+        # Leave as is to compare against value (Dirichlet boundary conditions)
+        # To the first half of the points (x=0) for Tf
+        u_bound_sb = u_pred_sb[:self.n_sb, 0]
+
+        # Get grad to compare derivative to 0 (Von Neumann boundary conditions)
+        # Only to the second half of the points (x=L) for Tf
         grad_u_tf = torch.autograd.grad(
             u_pred_sb[self.n_sb:, 0], input_sb,
             grad_outputs=torch.ones_like(u_pred_sb[self.n_sb:, 0]),
             create_graph=True)[0]
-
-        # Apply dirichlet to the points (x=0) for Tf
-        u_bound_sb = torch.zeros(self.n_sb)+self.T_hot
-
-        # Only to the second half of the points (x=L) for Tf
         grad_u_tf_x_L = grad_u_tf[self.n_sb:, 1]
 
         # Concat
@@ -252,7 +252,9 @@ class PINNTrainer:
         return u_bound_sb_tf
 
     def compute_pde_residual(self, input_int):
-        """Function to compute the PDE residuals"""
+        """Function to compute the PDE residuals
+        TODO: change U_f depending on phase
+        """
         input_int.requires_grad = True
         u = self.approximate_solution(input_int)
 
