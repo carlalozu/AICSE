@@ -49,7 +49,7 @@ class PINNTrainer:
         self.approximate_solution = NeuralNet(
             input_dimension=self.space_dimensions+self.time_dimensions,
             output_dimension=self.output_dimensions,
-            n_hidden_layers=2,
+            n_hidden_layers=4,
             neurons=100,
             retrain_seed=42,
         )
@@ -82,7 +82,7 @@ class PINNTrainer:
 
     def initial_condition(self, x):
         """Initial condition to solve the equation at t=0"""
-        return torch.zeros((x.shape[0], 1)) + self.T0
+        return torch.zeros(x.shape[0]) + self.T0
 
     def exact_solution(self, inputs):
         """Exact solution for the heat equation"""
@@ -133,6 +133,7 @@ class PINNTrainer:
 
         input_sb = self.convert(self.soboleng.draw(self.n_sb))
 
+        # Initialize data
         input_sb_0 = torch.clone(input_sb)
         input_sb_0[:, 1] = torch.full(input_sb_0[:, 1].shape, x0)
 
@@ -176,10 +177,11 @@ class PINNTrainer:
 
     def eval_initial_condition(self, input_tb):
         """Function to compute the terms required in the definition of
-        the TEMPORAL boundary residual.
+        the temporal boundary residual.
         """
         u_pred_tb = self.approximate_solution(input_tb)
-        return u_pred_tb
+        # Enforce boundary conditions only on Tf
+        return u_pred_tb[:,0]
 
     def eval_boundary_conditions(self, input_sb):
         """Function to compute the terms required in the definition
@@ -189,16 +191,22 @@ class PINNTrainer:
         input_sb.requires_grad = True 
         u_pred_sb = self.approximate_solution(input_sb)
 
+
         # Apply Von Neumann boundary conditions
         grad_u_tf = torch.autograd.grad(
-            u_pred_sb[:, 0].sum(), input_sb, create_graph=True)[0]
+            u_pred_sb[self.n_sb:, 0].sum(), input_sb, create_graph=True)[0]
+
+        # Apply dirichlet to the points (x=0) for Tf
+        u_bound_sb = torch.zeros(self.n_sb)+self.T_hot
 
         # Only to the second half of the points (x=L) for Tf
-        grad_u_tf_x = grad_u_tf[int(len(u_pred_sb) / 2):, 1]
-        grad_u_tf_x = torch.cat(
-            [u_pred_sb[: int(len(u_pred_sb) / 2), 0], grad_u_tf_x], 0)
+        grad_u_tf_x_L = grad_u_tf[self.n_sb:, 1]
 
-        return grad_u_tf_x
+        # Concat
+        u_bound_sb_tf = torch.cat(
+            [u_bound_sb, grad_u_tf_x_L], 0)
+
+        return u_bound_sb_tf
 
     def compute_pde_residual(self, input_int):
         """Function to compute the PDE residuals"""
