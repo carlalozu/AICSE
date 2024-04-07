@@ -16,6 +16,7 @@ class NeuralNet(nn.Module):
                 neurons,
                 retrain_seed):
         super().__init__()
+
         # Number of input dimensions n
         self.input_dimension = input_dimension
         # Number of output dimensions m
@@ -24,7 +25,7 @@ class NeuralNet(nn.Module):
         self.neurons = neurons
         # Number of hidden layers
         self.n_hidden_layers = n_hidden_layers
-        # Activation function
+        # Activation function, we only want positive values
         self.activation = nn.Tanh()
 
         self.input_layer = nn.Linear(self.input_dimension, self.neurons)
@@ -32,6 +33,7 @@ class NeuralNet(nn.Module):
             [nn.Linear(self.neurons, self.neurons) for _ in range(n_hidden_layers - 1)])
         self.output_layer = nn.Linear(self.neurons, self.output_dimension)
         self.retrain_seed = retrain_seed
+
         # Random Seed for weight initialization
         self.init_xavier()
 
@@ -48,7 +50,6 @@ class NeuralNet(nn.Module):
             x = self.activation(x)
         x = self.output_layer(x)
         ##############
-
         return x
 
     def init_xavier(self):
