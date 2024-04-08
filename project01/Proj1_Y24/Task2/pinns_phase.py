@@ -259,7 +259,6 @@ class Pinns:
         # Compute the second derivative
         grad_u_xx = torch.autograd.grad(
             grad_u_x.sum(), input_int, create_graph=True)[0][:, 1]
-        grad_u_xx = grad_u_xx
 
         phase = self.t0
         if phase % 4 == 0:
