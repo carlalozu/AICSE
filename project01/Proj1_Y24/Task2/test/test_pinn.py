@@ -55,4 +55,4 @@ def test_fit():
     n_tb = 64
 
     pinn = Pinns(n_int, n_sb, n_tb, t0, tf, **kwargs)
-    pinn.fit(1, True, max_iter=10)
+    pinn.fit(1, max_iter=10, verbose=False)
