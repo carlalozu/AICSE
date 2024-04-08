@@ -44,7 +44,7 @@ class Pinns:
             input_dimension=self.domain_extrema.shape[0],
             output_dimension=1,
             n_hidden_layers=4,
-            neurons=20,
+            neurons=100,
             retrain_seed=42
         )
 
@@ -53,7 +53,7 @@ class Pinns:
             input_dimension=self.domain_extrema.shape[0],
             output_dimension=1,
             n_hidden_layers=4,
-            neurons=20,
+            neurons=100,
             retrain_seed=42
         )
 
@@ -381,7 +381,7 @@ class Pinns:
 
         return history
 
-    def plot(self):
+    def plot(self, **kwargs):
         """Create plot"""
         inputs = self.convert(self.soboleng.draw(100000))
         output_tf = self.approximate_solution(inputs)
@@ -397,6 +397,7 @@ class Pinns:
                 inputs[:, 1].detach(),
                 c=output[:, i].detach(),
                 cmap="jet",
+                **kwargs
                 # clim=lims[i]
             )
             axs[i].set_xlabel("t")
@@ -415,7 +416,7 @@ class Pinns:
         plt.legend()
         plt.show()
 
-    def plot_reference(self):
+    def plot_reference(self, **kwargs):
         """Plot the reference solution"""
         input_meas_, output_meas_ = self.get_measurement_data()
         plt.scatter(
@@ -423,7 +424,8 @@ class Pinns:
             input_meas_[:, 1],
             c=output_meas_,
             cmap="jet",
-            clim=(1, 4)
+            **kwargs
+            # clim=(1, 4)
         )
         plt.xlabel("t")
         plt.ylabel("x")
