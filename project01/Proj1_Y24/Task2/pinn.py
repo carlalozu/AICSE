@@ -61,19 +61,6 @@ class Pinns:
             retrain_seed=42
         )
 
-        ########################################################
-        max_iter = 5000
-        self.optimizer = torch.optim.LBFGS(
-            list(self.approximate_solution.parameters()) +
-            list(self.approximate_coefficient.parameters()),
-            lr=float(0.5),
-            max_iter=max_iter,
-            max_eval=50000,
-            history_size=150,
-            line_search_fn="strong_wolfe",
-            tolerance_change=1.0 * np.finfo(float).eps
-        )
-
         # Generator of Sobol sequences --> Sobol sequences (see
         # https://en.wikipedia.org/wiki/Sobol_sequence)
         self.soboleng = torch.quasirandom.SobolEngine(
@@ -104,27 +91,27 @@ class Pinns:
 
         return input_tb, output_tb
 
-    def add_spatial_boundary_points_charging(self, x):
+    def add_spatial_boundary_points_charging(self):
         """Boundary points for charging phase"""
         # Dirichlet boundary condition
-        output_sb_0 = torch.zeros((x.shape[0], 1)) + self.T_hot
+        output_sb_0 = torch.zeros((self.n_sb_cycles, 1)) + self.T_hot
         # Zero Neumann boundary condition
-        output_sb_L = torch.zeros((x.shape[0], 1))
+        output_sb_L = torch.zeros((self.n_sb_cycles, 1))
         return output_sb_0, output_sb_L
 
-    def add_spatial_boundary_points_discharging(self, x):
+    def add_spatial_boundary_points_discharging(self):
         """Boundary points for discharging phase"""
-        # Dirichlet boundary condition
-        output_sb_L = torch.zeros((x.shape[0], 1)) + self.T_cold
         # Zero Neumann boundary condition
-        output_sb_0 = torch.zeros((x.shape[0], 1))
+        output_sb_0 = torch.zeros((self.n_sb_cycles, 1))
+        # Dirichlet boundary condition
+        output_sb_L = torch.zeros((self.n_sb_cycles, 1)) + self.T_cold
         return output_sb_0, output_sb_L
 
-    def add_spatial_boundary_points_idle(self, x):
+    def add_spatial_boundary_points_idle(self):
         """Boundary points for idle phase"""
         # Zero Neumann boundary condition
-        output_sb_L = torch.zeros((x.shape[0], 1))
-        output_sb_0 = torch.zeros((x.shape[0], 1))
+        output_sb_0 = torch.zeros((self.n_sb_cycles, 1))
+        output_sb_L = torch.zeros((self.n_sb_cycles, 1))
         return output_sb_0, output_sb_L
 
     def add_spatial_boundary_points(self):
@@ -144,19 +131,24 @@ class Pinns:
         input_sb_L[:, 1] = torch.full(input_sb_L[:, 1].shape, xL)
 
         # Add output coordinates
-        for i in range(self.t0, self.tf):
-            if i % 4 == 0:      # Multiple of 4
+        output_sb_0s = []
+        output_sb_Ls = []
+        for phase in range(self.t0, self.tf):
+            if phase % 4 == 0:      # Multiple of 4
                 print("Charging")
-                output_sb_0, output_sb_L = self.add_spatial_boundary_points_charging(
-                    input_sb_0)
-            elif i % 2 != 0:    # Odd number
+                output_sb_0, output_sb_L = self.add_spatial_boundary_points_charging()
+            elif phase % 2 != 0:    # Odd number
                 print("Idle")
-                output_sb_0, output_sb_L = self.add_spatial_boundary_points_idle(
-                    input_sb_0)
+                output_sb_0, output_sb_L = self.add_spatial_boundary_points_idle()
             else:               # Else
                 print("Discharging")
-                output_sb_0, output_sb_L = self.add_spatial_boundary_points_discharging(
-                    input_sb_0)
+                output_sb_0, output_sb_L = self.add_spatial_boundary_points_discharging()
+
+            output_sb_0s.append(output_sb_0)
+            output_sb_Ls.append(output_sb_L)
+
+        output_sb_0 = torch.cat(output_sb_0s, 0)
+        output_sb_L = torch.cat(output_sb_Ls, 0)
 
         return torch.cat([input_sb_0, input_sb_L], 0), torch.cat([output_sb_0, output_sb_L], 0)
 
@@ -220,27 +212,33 @@ class Pinns:
         input_sb.requires_grad = True
         u_pred_sb = self.approximate_solution(input_sb)
 
-        bound_x0 = None
-        bound_xL = None
-        for i in range(self.t0, self.tf):
-            u_x0 = u_pred_sb[:self.n_sb]
-            u_xL = u_pred_sb[self.n_sb:]
+        u_x0 = u_pred_sb[:self.n_sb]
+        u_xL = u_pred_sb[self.n_sb:]
+
+        bound_x0s = []
+        bound_xLs = []
+        i = 0
+        for phase in range(self.t0, self.tf):
+            print("Time: ", phase)
+
+            u_x0_ = u_x0[i*self.n_sb_cycles:(i+1)*self.n_sb_cycles]
+            u_xL_ = u_xL[self.n_sb+i*self.n_sb_cycles:self.n_sb+(i+1)*self.n_sb_cycles]
 
             # Differentiate u_x0 and u_xL with input_sb
             u_x0_x = torch.autograd.grad(
-                u_x0.sum(), input_sb, create_graph=True)[0][:, 1]    
+                u_x0_.sum(), input_sb, create_graph=True)[0][:, 1]
             u_x0_x = u_x0_x.reshape(-1, 1)[:self.n_sb]
 
             u_xL_x = torch.autograd.grad(
-                u_xL.sum(), input_sb, create_graph=True)[0][:, 1]
+                u_xL_.sum(), input_sb, create_graph=True)[0][:, 1]
             u_xL_x = u_xL_x.reshape(-1, 1)[self.n_sb:]
 
-            if i % 4 == 0: # Charging
+            if phase % 4 == 0: # Charging
                 print("BC for charging phase")
-                bound_x0 = u_x0
+                bound_x0 = u_x0_
                 bound_xL = u_xL_x
 
-            elif i % 2 != 0: # Idle
+            elif phase % 2 != 0: # Idle
                 print("BC for idle phase")
                 bound_x0 = u_x0_x
                 bound_xL = u_xL_x
@@ -248,7 +246,14 @@ class Pinns:
             else: # Discharging
                 print("BC for discharging phase")
                 bound_x0 = u_x0_x
-                bound_xL = u_xL
+                bound_xL = u_xL_
+
+            bound_x0s.append(bound_x0)
+            bound_xLs.append(bound_xL)
+            i += 1
+
+        bound_x0 = torch.cat(bound_x0s, 0)
+        bound_xL = torch.cat(bound_xLs, 0)
 
         # Concat
         u_bound = torch.cat([bound_x0, bound_xL], 0)
@@ -276,10 +281,7 @@ class Pinns:
         grad_u_t = grad_u[:, 0]
         grad_u_x = grad_u[:, 1]
 
-        ##############
-        # Compute the second derivative (HINT: Pay attention to the
-        # dimensions! --> torch.autograd.grad(..., ..., ...)[...][...]
-        ##############
+        # Compute the second derivative
         grad_u_xx = torch.autograd.grad(
             grad_u_x.sum(), input_int, create_graph=True)[0][:, 1]
 
@@ -336,8 +338,22 @@ class Pinns:
 
         return loss
 
-    def fit(self, num_epochs, verbose=True):
+    def fit(self, num_epochs, verbose=True, max_iter=5000):
         """Function to fit the PINN"""
+
+        ########################################################
+        optimizer = torch.optim.LBFGS(
+            list(self.approximate_solution.parameters()) +
+            list(self.approximate_coefficient.parameters()),
+            lr=float(0.5),
+            max_iter=max_iter,
+            max_eval=50000,
+            history_size=150,
+            line_search_fn="strong_wolfe",
+            tolerance_change=1.0 * np.finfo(float).eps
+        )
+        ########################################################
+
         history = []
         inp_train_sb = None
         u_train_sb = None
@@ -365,7 +381,7 @@ class Pinns:
                 ) = inputs_and_outputs
 
                 def closure():
-                    self.optimizer.zero_grad()
+                    optimizer.zero_grad()
                     loss = self.compute_loss(
                         inp_train_sb,
                         u_train_sb,
@@ -378,7 +394,7 @@ class Pinns:
                     history.append(loss.item())
                     return loss
 
-                self.optimizer.step(closure=closure)
+                optimizer.step(closure=closure)
 
         print('Final Loss: ', history[-1])
 
