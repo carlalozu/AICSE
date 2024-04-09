@@ -66,13 +66,12 @@ class Pinns:
         self.training_set_sb, self.training_set_tb, self.training_set_int = self.assemble_datasets()
 
 
-    # def convert(self, tens):
-    #     """Function to linearly transform a tensor whose value are between 0 and
-    #     1 to a tensor whose values are between the domain extrema"""
-    #     assert tens.shape[1] == self.domain_extrema.shape[0]
-    #     return tens
-    #     return tens * (self.domain_extrema[:, 1] - self.domain_extrema[:, 0]
-    #                    ) + self.domain_extrema[:, 0]
+    def convert(self, tens):
+        """Function to linearly transform a tensor whose value are between 0 and
+        1 to a tensor whose values are between the domain extrema"""
+        assert tens.shape[1] == self.domain_extrema.shape[0]
+        return tens * (self.domain_extrema[:, 1] - self.domain_extrema[:, 0]
+                       ) + self.domain_extrema[:, 0]
 
     def initial_condition(self, x):
         """Initial condition to solve the equation, T0"""
@@ -82,7 +81,7 @@ class Pinns:
         """Function returning the input-output tensor required to assemble the
         training set S_tb corresponding to the temporal boundary """
 
-        input_tb = self.soboleng.draw(self.n_tb)
+        input_tb = self.convert(self.soboleng.draw(self.n_tb))
         input_tb[:, 0] = torch.full(input_tb[:, 0].shape, self.t0)
         output_tb = self.initial_condition(input_tb).reshape(-1, 1)
 
@@ -119,7 +118,7 @@ class Pinns:
         xL = self.domain_extrema[1, 1]
 
         # Add input coordinates
-        input_sb = self.soboleng.draw(self.n_sb)
+        input_sb = self.convert(self.soboleng.draw(self.n_sb))
 
         input_sb_0 = torch.clone(input_sb)
         input_sb_0[:, 1] = torch.full(input_sb_0[:, 1].shape, x0)
@@ -147,7 +146,7 @@ class Pinns:
         enforced"""
         # Return input-output tensor required to assemble the training set S_int
         # corresponding to the interior domain where the PDE is enforced
-        input_int = self.soboleng.draw(self.n_int)
+        input_int = self.convert(self.soboleng.draw(self.n_int))
         output_int = torch.zeros((input_int.shape[0], 1))
 
         return input_int, output_int
@@ -161,7 +160,6 @@ class Pinns:
         # Extract the data
         x = torch.tensor(data_filtered['x'].unique(), dtype=torch.float)
         t = torch.tensor(data_filtered['t'].unique(), dtype=torch.float)
-        t -= self.t0
 
         # Define the input-output tensor required to assemble the training
         input_meas = torch.cartesian_prod(x, t)
@@ -385,7 +383,7 @@ class Pinns:
 
     def plot(self, **kwargs):
         """Create plot"""
-        inputs = self.soboleng.draw(100000)
+        inputs = self.convert(self.soboleng.draw(100000))
         output_tf = self.approximate_solution(inputs)
         output_ts = self.approximate_coefficient(inputs)
 
@@ -395,7 +393,7 @@ class Pinns:
         # lims = [(1, 4), (1, 3)]
         for i in range(2):
             im = axs[i].scatter(
-                inputs[:, 0].detach()+self.t0,
+                inputs[:, 0].detach(),
                 inputs[:, 1].detach(),
                 c=output[:, i].detach(),
                 cmap="jet",
@@ -422,7 +420,7 @@ class Pinns:
         """Plot the reference solution"""
         input_meas_, output_meas_ = self.get_measurement_data()
         plt.scatter(
-            input_meas_[:, 0]+self.t0,
+            input_meas_[:, 0],
             input_meas_[:, 1],
             c=output_meas_,
             cmap="jet",
