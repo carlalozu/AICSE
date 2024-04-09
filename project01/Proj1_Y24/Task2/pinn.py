@@ -70,7 +70,6 @@ class Pinns:
         # Training sets S_sb, S_tb, S_int as torch dataloader
         self.training_set_sb, self.training_set_tb, self.training_set_int = self.assemble_datasets()
 
-
     def convert(self, tens):
         """Function to linearly transform a tensor whose value are between 0 and
         1 to a tensor whose values are between the domain extrema"""
@@ -80,7 +79,7 @@ class Pinns:
 
     def initial_condition(self, x):
         """Initial condition to solve the equation, T0"""
-        return torch.ones_like(x[:,1])*self.T0
+        return torch.ones_like(x[:, 1])*self.T0
 
     def add_temporal_boundary_points(self):
         """Function returning the input-output tensor required to assemble the
@@ -123,13 +122,17 @@ class Pinns:
         xL = self.domain_extrema[1, 1]
 
         # Add input coordinates
-        input_sb = self.convert(self.soboleng.draw(self.n_sb))
+        input_sb = torch.zeros((self.n_sb, self.domain_extrema.shape[0]))
+
+        for i, phase in enumerate(range(self.t0, self.tf)):
+            input_sb[self.n_sb_cycles*i:self.n_sb_cycles *
+                     (i+1), 0] = self.soboleng.draw(self.n_sb_cycles)[:, 0] + phase
 
         input_sb_0 = torch.clone(input_sb)
-        input_sb_0[:, 1] = torch.full(input_sb_0[:, 1].shape, x0)
+        input_sb_0[:, 1] = torch.ones(self.n_sb) * x0
 
         input_sb_L = torch.clone(input_sb)
-        input_sb_L[:, 1] = torch.full(input_sb_L[:, 1].shape, xL)
+        input_sb_L[:, 1] = torch.ones(self.n_sb) * xL
 
         # Add output coordinates
         output_sb_0s = []
@@ -148,10 +151,10 @@ class Pinns:
             output_sb_0s.append(output_sb_0)
             output_sb_Ls.append(output_sb_L)
 
-        output_sb_0 = torch.cat(output_sb_0s, 0)
-        output_sb_L = torch.cat(output_sb_Ls, 0)
+        output_sb_0_ = torch.cat(output_sb_0s)
+        output_sb_L_ = torch.cat(output_sb_Ls)
 
-        return torch.cat([input_sb_0, input_sb_L], 0), torch.cat([output_sb_0, output_sb_L], 0)
+        return torch.cat([input_sb_0, input_sb_L], 0), torch.cat([output_sb_0_, output_sb_L_], 0)
 
     def add_interior_points(self):
         """Function returning the input-output tensor required to assemble the
@@ -160,6 +163,11 @@ class Pinns:
         # Return input-output tensor required to assemble the training set S_int
         # corresponding to the interior domain where the PDE is enforced
         input_int = self.convert(self.soboleng.draw(self.n_int))
+
+        for i, phase in enumerate(range(self.t0, self.tf)):
+            input_int[self.n_int_cycles*i:self.n_int_cycles *
+                      (i+1), 0] = self.soboleng.draw(self.n_int_cycles)[:, 0] + phase
+
         output_int = torch.zeros((input_int.shape[0], 1))
 
         return input_int, output_int
@@ -168,22 +176,19 @@ class Pinns:
         """Read measurements from data file and return the input-output tensor
         """
         data = pd.read_csv('DataSolution.txt', sep=",", header=0)
+        data.sort_values(by=['t', 'x'], inplace=True)
         data_filtered = data[(data['t'] < self.tf) & (data['t'] >= self.t0)]
 
         # Extract the data
-        x = torch.tensor(data_filtered['x'].unique(), dtype=torch.float)
         t = torch.tensor(data_filtered['t'].unique(), dtype=torch.float)
+        x = torch.tensor(data_filtered['x'].unique(), dtype=torch.float)
 
         # Define the input-output tensor required to assemble the training
-        input_meas = torch.cartesian_prod(x, t)
+        input_meas = torch.cartesian_prod(t, x)
         output_meas = torch.tensor(
             data_filtered['tf'].values, dtype=torch.float)
 
-        input_meas_ = torch.zeros(input_meas.shape)
-        input_meas_[:, 0] = input_meas[:, 1]  # t in position 0
-        input_meas_[:, 1] = input_meas[:, 0]  # x in position 1
-
-        return input_meas_, output_meas.reshape(-1, 1)
+        return input_meas, output_meas.reshape(-1, 1)
 
     def assemble_datasets(self):
         """Function returning the training sets S_sb, S_tb, S_int as dataloader"""
@@ -212,8 +217,18 @@ class Pinns:
         input_sb.requires_grad = True
         u_pred_sb = self.approximate_solution(input_sb)
 
+        # Differentiate u_x0 and u_xL with input_sb
+        u_pred_sb_x = torch.autograd.grad(
+            u_pred_sb, input_sb,
+            grad_outputs=torch.ones_like(u_pred_sb),
+            create_graph=True)[0][:, 1]
+        u_pred_sb_x = u_pred_sb_x.reshape(-1, 1)
+
         u_x0 = u_pred_sb[:self.n_sb]
         u_xL = u_pred_sb[self.n_sb:]
+
+        u_x0_x = u_pred_sb_x[:self.n_sb]
+        u_xL_x = u_pred_sb_x[self.n_sb:]
 
         bound_x0s = []
         bound_xLs = []
@@ -226,28 +241,22 @@ class Pinns:
             u_x0_ = u_x0[lims[0]:lims[1]]
             u_xL_ = u_xL[lims[0]:lims[1]]
 
-            # Differentiate u_x0 and u_xL with input_sb
-            u_x0_x = torch.autograd.grad(
-                u_x0_.sum(), input_sb, create_graph=True)[0][:, 1]
-            u_x0_x = u_x0_x.reshape(-1, 1)[lims[0]:lims[1]]
+            u_x0_x_ = u_x0_x[lims[0]:lims[1]]
+            u_xL_x_ = u_xL_x[lims[0]:lims[1]]
 
-            u_xL_x = torch.autograd.grad(
-                u_xL_.sum(), input_sb, create_graph=True)[0][:, 1]
-            u_xL_x = u_xL_x.reshape(-1, 1)[self.n_sb+lims[0]:self.n_sb+lims[1]]
-
-            if phase % 4 == 0: # Charging
+            if phase % 4 == 0:  # Charging
                 # print("BC for charging phase")
                 bound_x0 = torch.clone(u_x0_)
-                bound_xL = torch.clone(u_xL_x)
+                bound_xL = torch.clone(u_xL_x_)
 
-            elif phase % 2 != 0: # Idle
+            elif phase % 2 != 0:  # Idle
                 # print("BC for idle phase")
-                bound_x0 = torch.clone(u_x0_x)
-                bound_xL = torch.clone(u_xL_x)
+                bound_x0 = torch.clone(u_x0_x_)
+                bound_xL = torch.clone(u_xL_x_)
 
-            else: # Discharging
+            else:  # Discharging
                 # print("BC for discharging phase")
-                bound_x0 = torch.clone(u_x0_x)
+                bound_x0 = torch.clone(u_x0_x_)
                 bound_xL = torch.clone(u_xL_)
 
             bound_x0s.append(bound_x0)
@@ -280,6 +289,19 @@ class Pinns:
         # and dsum_u/dxi = d(u1 + u2 u3 + u4 + ... + un)/dxi = d(u(x1) + u(x2)
         # u3(x3) + u4(x4) + ... + u(xn))/dxi = dui/dxi
 
+        grad_u = torch.autograd.grad(u, input_int,
+                                     grad_outputs=torch.ones_like(u),
+                                     create_graph=True)[0]
+
+        grad_u_t = grad_u[:, 0]
+        grad_u_x = grad_u[:, 1]
+
+        # Compute the second derivative
+        grad_u_xx = torch.autograd.grad(
+            grad_u_x, input_int,
+            grad_outputs=torch.ones_like(grad_u_x),
+            create_graph=True)[0][:, 1]
+
         i = 0
         residuals = []
         for phase in range(self.t0, self.tf):
@@ -289,14 +311,10 @@ class Pinns:
             u_ = u[lims[0]:lims[1]]
             k_ = k[lims[0]:lims[1]]
 
-            grad_u = torch.autograd.grad(u_.sum(), input_int, create_graph=True)[0]
-            grad_u_t = grad_u[:, 0][lims[0]:lims[1]]
-            grad_u_x = grad_u[:, 1][lims[0]:lims[1]]
+            grad_u_x_ = grad_u_x[lims[0]:lims[1]]
+            grad_u_t_ = grad_u_t[lims[0]:lims[1]]
 
-            # Compute the second derivative
-            grad_u_xx = torch.autograd.grad(
-                grad_u_x.sum(), input_int, create_graph=True)[0][:, 1]
-            grad_u_xx = grad_u_xx[lims[0]:lims[1]]
+            grad_u_xx_ = grad_u_xx[lims[0]:lims[1]]
 
             if phase % 4 == 0:
                 # print("Charging, u_f = 1")
@@ -308,13 +326,14 @@ class Pinns:
                 # print("Discharging, u_f = -1")
                 u_f = -1
 
-            residual = grad_u_t + u_f*grad_u_x - \
-                self.alpha_f*grad_u_xx + self.h_f*(u_ - k_)
+            residual = grad_u_t_ + u_f*grad_u_x_ - \
+                self.alpha_f*grad_u_xx_ + self.h_f*(u_ - k_)
 
             assert residual.shape[0] == self.n_int_cycles
             residuals.append(residual)
             i += 1
-        full_residual = torch.cat(residuals, 0)
+
+        full_residual = torch.cat(residuals)
         assert full_residual.shape[0] == self.n_int
         return full_residual.reshape(-1, 1)
 
@@ -351,7 +370,7 @@ class Pinns:
 
         ##############
 
-        loss_u = loss_sb + loss_tb + loss_meas
+        loss_u = loss_tb + loss_meas + loss_sb
 
         loss = torch.log10(self.lambda_u * loss_u + loss_int)
         if verbose:
@@ -367,7 +386,7 @@ class Pinns:
         optimizer = torch.optim.LBFGS(
             list(self.approximate_solution.parameters()) +
             list(self.approximate_coefficient.parameters()),
-            lr=float(0.5),
+            lr=float(0.3),
             max_iter=max_iter,
             max_eval=50000,
             history_size=150,
@@ -422,7 +441,7 @@ class Pinns:
 
         return history
 
-    def plot(self):
+    def plot(self, **kwargs):
         """Create plot"""
         inputs = self.convert(self.soboleng.draw(100000))
         output_tf = self.approximate_solution(inputs)
@@ -438,7 +457,7 @@ class Pinns:
                 inputs[:, 1].detach(),
                 c=output[:, i].detach(),
                 cmap="jet",
-                # clim=lims[i]
+                **kwargs
             )
             axs[i].set_xlabel("t")
             axs[i].set_ylabel("x")
@@ -456,14 +475,14 @@ class Pinns:
         plt.legend()
         plt.show()
 
-    def plot_reference(self):
+    def plot_reference(self, **kwargs):
         input_meas_, output_meas_ = self.get_measurement_data()
         plt.scatter(
             input_meas_[:, 0],
             input_meas_[:, 1],
             c=output_meas_,
             cmap="jet",
-            clim=(1, 4)
+            **kwargs
         )
         plt.xlabel("t")
         plt.ylabel("x")
