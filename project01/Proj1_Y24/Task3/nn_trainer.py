@@ -7,10 +7,12 @@ from neural_net import NeuralNet
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, root_mean_squared_error
+from sklearn.metrics import (
+    mean_squared_error, mean_absolute_error, r2_score, root_mean_squared_error)
 
-class PinnTrainer:
-    """Class to solve an inverse problem using physics-informed neural network (PINN)"""
+
+class NNTrainer:
+    """Class to solve a regression problem using a neural net"""
 
     def __init__(self, dataset_train, dataset_test):
 
@@ -33,6 +35,7 @@ class PinnTrainer:
             neurons=(self.n_dims-1)*2,
             retrain_seed=42
         )
+
     @staticmethod
     def convert_df_to_tensor(df):
         """Function to convert a pandas dataframe to a PyTorch tensor"""
@@ -48,7 +51,8 @@ class PinnTrainer:
         output_train = torch.tensor(
             dataset_train['median_house_value'].values, dtype=torch.float32).reshape(-1, 1)
         output_train_minmax = self.minmax_scaler.fit_transform(output_train)
-        output_train_minmax = torch.tensor(output_train_minmax.flatten(), dtype=torch.float32)
+        output_train_minmax = torch.tensor(
+            output_train_minmax.flatten(), dtype=torch.float32)
 
         input_test = self.convert_df_to_tensor(
             dataset_test.drop('median_house_value', axis=1))
@@ -57,18 +61,18 @@ class PinnTrainer:
             dataset_test['median_house_value'].values, dtype=torch.float32).reshape(-1, 1)
 
         output_test_minmax = self.minmax_scaler.transform(output_test)
-        output_test_minmax = torch.tensor(output_test_minmax.flatten(), dtype=torch.float32)
+        output_test_minmax = torch.tensor(
+            output_test_minmax.flatten(), dtype=torch.float32)
 
         dataset_train_ = torch.utils.data.TensorDataset(
             input_train, output_train_minmax)
         dataset_test_ = torch.utils.data.TensorDataset(
             input_test, output_test_minmax)
 
-
         dataloader_params = {
-            "batch_size":150,
-            "shuffle":True,
-            "pin_memory":True,
+            "batch_size": 150,
+            "shuffle": True,
+            "pin_memory": True,
         }
         training_set = DataLoader(dataset_train_, **dataloader_params)
         testing_set = DataLoader(dataset_test_, **dataloader_params)
@@ -106,7 +110,8 @@ class PinnTrainer:
 
         if verbose:
             print("Total loss (MSE): ", round(loss.item(), 4))
-            print("Total loss not normalized (RMSE): ", round(loss_not_normalized.item(), 4))
+            print("Total loss not normalized (RMSE): ",
+                  round(loss_not_normalized.item(), 4))
 
         return loss, loss_not_normalized
 
@@ -176,19 +181,19 @@ class PinnTrainer:
                 y.extend(targets.numpy())
 
         y_hat_ = self.unscale(y_hat)
-        y_     = self.unscale(y)
+        y_ = self.unscale(y)
 
         # Normalized
-        mse  = mean_squared_error(y, y_hat)
+        mse = mean_squared_error(y, y_hat)
         rmse = root_mean_squared_error(y, y_hat)
-        mae  = mean_absolute_error(y, y_hat)
-        r2   = r2_score(y, y_hat)
+        mae = mean_absolute_error(y, y_hat)
+        r2 = r2_score(y, y_hat)
 
         # Unnormalized
-        mse_  = mean_squared_error(y_, y_hat_)
+        mse_ = mean_squared_error(y_, y_hat_)
         rmse_ = root_mean_squared_error(y_, y_hat_)
-        mae_  = mean_absolute_error(y_, y_hat_)
-        r2_   = r2_score(y_, y_hat_)
+        mae_ = mean_absolute_error(y_, y_hat_)
+        r2_ = r2_score(y_, y_hat_)
 
         print("Normalized values")
         print("Mean Squared Error (MSE):", round(mse, 4))

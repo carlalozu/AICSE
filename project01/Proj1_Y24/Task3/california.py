@@ -1,4 +1,5 @@
 
+"""This is just the original notebook converted into a python script"""
 # <center>
 # <img src="https://habrastorage.org/files/fd4/502/43d/fd450243dd604b81b9713213a247aa20.jpg" />
 #
