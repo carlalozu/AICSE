@@ -50,16 +50,6 @@ class PINNTrainer:
             hidden_size=100,
         )
 
-        # Setup optimizer
-        self.optimizer = torch.optim.LBFGS(
-            self.approximate_solution.parameters(),
-            lr=float(0.5),
-            max_iter=10000,
-            max_eval=10000,
-            history_size=150,
-            line_search_fn="strong_wolfe",
-            tolerance_change=1.0 * np.finfo(float).eps)
-
         # Generator of Sobol sequences
         self.soboleng = torch.quasirandom.SobolEngine(
             dimension=self.domain_extrema.shape[0])
@@ -240,10 +230,10 @@ class PINNTrainer:
         assert u_pred_sb.shape[1] == u_train_sb.shape[1]
         assert u_pred_tb.shape[1] == u_train_tb.shape[1]
 
-        # Compute interior PDE residual.
+        # Compute interior PDE residual
         r_int = self.compute_pde_residual(inp_train_int)
 
-        # Compute spatial boundary residual.
+        # Compute spatial boundary residual
         r_sb = u_pred_sb - u_train_sb
 
         # Compute temporal boundary residual
@@ -265,8 +255,20 @@ class PINNTrainer:
 
         return loss
 
-    def fit(self, num_epochs, verbose):
+    def fit(self, num_epochs, max_iter=10000, verbose=False):
         """Function to fit the PINN"""
+
+        # Setup optimizer
+        optimizer = torch.optim.LBFGS(
+            self.approximate_solution.parameters(),
+            lr=float(0.5),
+            max_iter=max_iter,
+            max_eval=10000,
+            history_size=150,
+            line_search_fn="strong_wolfe",
+            tolerance_change=1.0 * np.finfo(float).eps
+        )
+
         history = []
         inp_train_sb = None
         u_train_sb = None
@@ -290,7 +292,7 @@ class PINNTrainer:
                     ) = inputs_and_outputs
 
                     def closure():
-                        self.optimizer.zero_grad()
+                        optimizer.zero_grad()
                         loss = self.compute_loss(
                             inp_train_sb,
                             u_train_sb,
@@ -303,32 +305,42 @@ class PINNTrainer:
                         history.append(loss.item())
                         return loss
 
-                    self.optimizer.step(closure=closure)
+                    optimizer.step(closure=closure)
 
         print('Final Loss: ', history[-1])
 
         return history
 
-    def plot(self):
+    def plot(self, inputs, outputs):
         """Create plot"""
-        inputs = self.soboleng.draw(100000)
-        output = self.approximate_solution(inputs)
-
-        labels = ["T_f", "T_s"]
-        _, axs = plt.subplots(1, 2, figsize=(16, 6), dpi=150)
+        labels = ["$T_f$", "$T_s$"]
+        fig , axs = plt.subplots(1, 2, figsize=(16, 6), dpi=150, frameon=False)
 
         for i in range(2):
             im = axs[i].scatter(
                 inputs[:, 1].detach(),
                 inputs[:, 0].detach(),
-                c=output[:, i].detach(),
+                c=outputs[:, i].detach(),
                 cmap="jet",
                 clim=(1, 4)
             )
             axs[i].set_xlabel("x")
             axs[i].set_ylabel("t")
             axs[i].grid(True, which="both", ls=":")
-            axs[i].set_title(f"Approximate Solution {labels[i]}")
+            axs[i].set_title(labels[i])
 
         plt.colorbar(im, ax=axs)
         plt.show()
+        return fig
+
+    def plot_loss_function(self, hist):
+        """Function to plot the loss function"""
+        plt.figure(dpi=100)
+        plt.grid(True, which="both", ls=":")
+        plt.plot(np.arange(1, len(hist) + 1), hist, label="Train Loss")
+        plt.xscale("log")
+        plt.xlabel("Iteration")
+        plt.ylabel("Log loss")
+        plt.legend()
+        plt.show()
+
