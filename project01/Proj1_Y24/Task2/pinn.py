@@ -49,7 +49,7 @@ class Pinns:
             input_dimension=self.domain_extrema.shape[0],
             output_dimension=1,
             n_hidden_layers=4,
-            neurons=20,
+            neurons=30,
             retrain_seed=42
         )
 
@@ -58,7 +58,7 @@ class Pinns:
             input_dimension=self.domain_extrema.shape[0],
             output_dimension=1,
             n_hidden_layers=4,
-            neurons=20,
+            neurons=30,
             retrain_seed=42
         )
 

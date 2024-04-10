@@ -6,16 +6,18 @@ from torch import nn
 from neural_net import NeuralNet
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from sklearn.preprocessing import MinMaxScaler
+
 class PinnTrainer:
     """Class to solve an inverse problem using physics-informed neural network (PINN)"""
 
     def __init__(self, dataset_train, dataset_test):
+
         # Assemble the datasets
 
         self.n_dims = dataset_train.shape[1]
 
-        self.minmax_scaler = StandardScaler()
+        self.minmax_scaler = MinMaxScaler()
         self.dataset_train, self.dataset_test = self.assemble_datasets(
             dataset_train, dataset_test)
 
@@ -26,10 +28,11 @@ class PinnTrainer:
         self.network = NeuralNet(
             input_dimension=self.n_dims-1,
             output_dimension=1,
-            n_hidden_layers=3,
-            neurons=(self.n_dims-1)*2,
+            n_hidden_layers=4,
+            neurons=(self.n_dims-1)*5,
             retrain_seed=42
         )
+
 
     def assemble_datasets(self, dataset_train, dataset_test):
         """Function to assemble the datasets"""
@@ -50,76 +53,64 @@ class PinnTrainer:
         output_test_minmax = self.minmax_scaler.transform(output_test)
         output_test_minmax = torch.tensor(output_test_minmax.flatten(), dtype=torch.float32)
 
-        dataset_train = torch.utils.data.TensorDataset(
+        dataset_train_ = torch.utils.data.TensorDataset(
             input_train, output_train_minmax)
-        dataset_test = torch.utils.data.TensorDataset(
+        dataset_test_ = torch.utils.data.TensorDataset(
             input_test, output_test_minmax)
 
-        training_set = DataLoader(dataset_train,
-                                  batch_size=32,
+        training_set = DataLoader(dataset_train_,
+                                  batch_size=dataset_train.shape[0]//10,
                                   shuffle=True,
                                   pin_memory=True)
 
-        testing_set = DataLoader(dataset_test,
-                                 batch_size=32,
+        testing_set = DataLoader(dataset_test_,
+                                 batch_size=dataset_train.shape[0]//10,
                                  shuffle=True,
                                  pin_memory=True)
 
         return training_set, testing_set
 
-    def un_normalize(self, y_hat, y):
-        """Function to unnormalize the data"""
+    def compute_loss(self, x, y, verbose=False):
+        """Function to compute the loss"""
+        outputs = self.network(x)
+        y = y.reshape(-1, 1)
+        loss = self.loss_function(outputs, y)
+
+
         # Inverse transform using the scalers
-        y_hat_inverse = self.minmax_scaler.inverse_transform(y_hat.detach().numpy())
+        outputs_inverse = self.minmax_scaler.inverse_transform(outputs.detach().numpy())
         y_inverse = self.minmax_scaler.inverse_transform(y)
 
         # Convert back to PyTorch tensor
-        y_hat_inverse = torch.tensor(y_hat_inverse.flatten(), dtype=torch.float32)
+        outputs_inverse = torch.tensor(outputs_inverse.flatten(), dtype=torch.float32)
         y_inverse = torch.tensor(y_inverse.flatten(), dtype=torch.float32)
-        return y_hat_inverse, y_inverse
-
-    def compute_loss(self, x, y, verbose=False):
-        """Function to compute the loss"""
-        y_hat = self.network(x)
-        y = y.reshape(-1, 1)
-
-        loss = self.loss_function(y_hat, y)
-
-        # Inverse transform using the scalers
-        y_hat_inverse, y_inverse = self.un_normalize(y_hat, y)
 
         # MSE of not normalized values
-        loss_not_normalized = torch.sqrt(torch.mean((y_hat_inverse-y_inverse)**2))
-
+        loss_not_normalized = torch.sqrt(torch.mean((outputs_inverse-y_inverse)**2))
         if verbose:
             print("Total loss: ", round(loss.item(), 4))
-            print("Total loss nt normalized: ", round(loss_not_normalized.item(), 4))
+            print("Total loss not normalized: ", round(loss_not_normalized.item(), 4))
         return loss, loss_not_normalized
 
 
     def test_model(self):
         """Function to test the model on the test set for a fold"""
-        total_rmse_, total_rmse = 0, 0
+        correct, total_rmse = 0, 0
 
         n = 0
         with torch.no_grad():
             for data in self.dataset_test:
                 inputs, targets = data
-                targets = targets.reshape(-1, 1)
-                y_hat = self.network(inputs)
-                y_hat_, targets_ = self.un_normalize(y_hat, targets)
-
-                rmse = torch.sqrt(self.loss_function(y_hat, targets))
-                rmse_ = torch.sqrt(torch.mean((y_hat_-targets_)**2))
-
+                outputs = self.network(inputs)
+                rmse = torch.sqrt(self.loss_function(outputs, targets))
                 total_rmse += rmse.item()
-                total_rmse_ += rmse_.item()
-
+                correct += (rmse < 0.1).sum().item()
                 n += 1
 
+        accuracy = 100 * correct / n
+        print(f'Accuracy: {accuracy:.2f}%')
         print(f'RMSE: {total_rmse/n:.2f}')
-        print(f'RMSE not normalized: {total_rmse_:.2f}')
-        return total_rmse, total_rmse_
+        return accuracy
 
     def fit(self, num_epochs, verbose=True):
         """Function to fit the PINN"""

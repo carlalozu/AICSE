@@ -50,6 +50,7 @@ class NeuralNet(nn.Module):
             x = hidden_layer(x)
             x = self.activation(x)
         x = self.output_layer(x)
+        x = nn.Sigmoid()(x)
         ##############
         return x
 
