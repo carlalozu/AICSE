@@ -14,7 +14,7 @@ warnings.filterwarnings('ignore') # `do not disturbe` mode
 
 
 # change this if needed
-PATH_TO_DATA = '/Users/carla/Documents/Courses/Spring2024/AICSE/project01/Proj1_Y24/Task3/data'
+PATH_TO_DATA = 'data'
 full_df = pd.read_csv(os.path.join(PATH_TO_DATA, 'housing.csv'))
 
 
