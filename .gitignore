@@ -292,5 +292,5 @@ TSWLatexianTemp*
 # standalone packages
 *.sta
 
-# dsstore
-**/. ... 
+# DS_Store
+**/.DS_Store
