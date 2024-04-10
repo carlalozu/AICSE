@@ -29,26 +29,29 @@ class PinnTrainer:
         self.network = NeuralNet(
             input_dimension=self.n_dims-1,
             output_dimension=1,
-            n_hidden_layers=4,
+            n_hidden_layers=3,
             neurons=(self.n_dims-1)*2,
             retrain_seed=42
         )
-
+    @staticmethod
+    def convert_df_to_tensor(df):
+        """Function to convert a pandas dataframe to a PyTorch tensor"""
+        a = np.vstack(df.values).astype(np.float32)
+        return torch.from_numpy(a)
 
     def assemble_datasets(self, dataset_train, dataset_test):
         """Function to assemble the datasets"""
-        a = dataset_train.drop('median_house_value', axis=1).values
-        a = np.vstack(a).astype(np.float32)
-        input_train = torch.from_numpy(a)
+
+        input_train = self.convert_df_to_tensor(
+            dataset_train.drop('median_house_value', axis=1))
 
         output_train = torch.tensor(
             dataset_train['median_house_value'].values, dtype=torch.float32).reshape(-1, 1)
         output_train_minmax = self.minmax_scaler.fit_transform(output_train)
         output_train_minmax = torch.tensor(output_train_minmax.flatten(), dtype=torch.float32)
 
-        a = dataset_test.drop('median_house_value', axis=1).values
-        a = np.vstack(a).astype(np.float32)
-        input_test = torch.from_numpy(a)
+        input_test = self.convert_df_to_tensor(
+            dataset_test.drop('median_house_value', axis=1))
 
         output_test = torch.tensor(
             dataset_test['median_house_value'].values, dtype=torch.float32).reshape(-1, 1)
@@ -61,15 +64,14 @@ class PinnTrainer:
         dataset_test_ = torch.utils.data.TensorDataset(
             input_test, output_test_minmax)
 
-        training_set = DataLoader(dataset_train_,
-                                  300,
-                                  shuffle=True,
-                                  pin_memory=True)
 
-        testing_set = DataLoader(dataset_test_,
-                                 300,
-                                 shuffle=True,
-                                 pin_memory=True)
+        dataloader_params = {
+            "batch_size":150,
+            "shuffle":True,
+            "pin_memory":True,
+        }
+        training_set = DataLoader(dataset_train_, **dataloader_params)
+        testing_set = DataLoader(dataset_test_, **dataloader_params)
 
         return training_set, testing_set
 
@@ -78,11 +80,13 @@ class PinnTrainer:
         is_tensor = False
         if isinstance(x, torch.Tensor):
             is_tensor = True
-            x = torch.clone(x)
-            x = x.detach().numpy()
+            x = torch.clone(x).detach().numpy()
+
+        # Invert scaling
         x_ = self.minmax_scaler.inverse_transform(x)
-        # Convert back to PyTorch tensor
+
         if is_tensor:
+            # Convert back to PyTorch tensor
             x_ = torch.tensor(x_.flatten(), dtype=torch.float32)
         return x_
 
@@ -111,7 +115,7 @@ class PinnTrainer:
 
         optimizer = torch.optim.Adam(
             self.network.parameters(),
-            lr=1e-3,
+            lr=1e-2,
             weight_decay=1e-6,
         )
 
@@ -187,13 +191,13 @@ class PinnTrainer:
         r2_   = r2_score(y_, y_hat_)
 
         print("Normalized values")
-        print("Mean Squared Error (MSE):", mse)
-        print("Root Mean Squared Error (RMSE):", rmse)
-        print("Mean Absolute Error (MAE):", mae)
-        print("R-squared (R2):", r2, "\n")
+        print("Mean Squared Error (MSE):", round(mse, 4))
+        print("Root Mean Squared Error (RMSE):", round(rmse, 4))
+        print("Mean Absolute Error (MAE):", round(mae, 4))
+        print("R-squared (R2):", round(r2, 4), "\n")
 
         print("Unnormalized values")
-        print("Mean Squared Error (MSE):", mse_)
-        print("Root Mean Squared Error (RMSE):", rmse_)
-        print("Mean Absolute Error (MAE):", mae_)
-        print("R-squared (R2):", r2_)
+        print("Mean Squared Error (MSE):", round(mse_, 2))
+        print("Root Mean Squared Error (RMSE):", round(rmse_, 2))
+        print("Mean Absolute Error (MAE):", round(mae_, 2))
+        print("R-squared (R2):", round(r2_, 4))
