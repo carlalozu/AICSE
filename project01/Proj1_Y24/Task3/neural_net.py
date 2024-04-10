@@ -28,7 +28,7 @@ class NeuralNet(nn.Module):
         # Activation function, we only want positive values
         self.activation = nn.ReLU()
 
-        self.dropout = nn.Dropout(0.2)
+        self.dropout = nn.Dropout(0.3)
         self.input_layer = nn.Linear(self.input_dimension, self.neurons)
         self.hidden_layers = nn.ModuleList(
             [nn.Linear(self.neurons, self.neurons) for _ in range(n_hidden_layers - 1)])
