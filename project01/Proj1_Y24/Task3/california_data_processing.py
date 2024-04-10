@@ -4,7 +4,7 @@ import os
 import warnings
 
 from sklearn.model_selection import KFold, cross_val_score, train_test_split
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.linear_model import Ridge, LinearRegression
 
 import pandas as pd
@@ -14,7 +14,7 @@ warnings.filterwarnings('ignore') # `do not disturbe` mode
 
 
 # change this if needed
-PATH_TO_DATA = 'data'
+PATH_TO_DATA = '/Users/carla/Documents/Courses/Spring2024/AICSE/project01/Proj1_Y24/Task3/data'
 full_df = pd.read_csv(os.path.join(PATH_TO_DATA, 'housing.csv'))
 
 
@@ -70,8 +70,7 @@ temp_train, temp_valid = train_test_split(
 # rows with NaNs, because there is a chance, that it can contain useful information.
 
 
-lin.fit(train_data.drop(['total_bedrooms'], axis=1),
-        train_data['total_bedrooms'])
+lin.fit(train_data.drop(['total_bedrooms'], axis=1), train_data['total_bedrooms'])
 
 train_df['total_bedrooms_is_nan'] = pd.isnull(train_df).any(axis=1).astype(int)
 test_df['total_bedrooms_is_nan'] = pd.isnull(test_df).any(axis=1).astype(int)
@@ -200,6 +199,7 @@ new_features_train_df['1/distance_to_SF'] = 1 / \
     (train_df['distance_to_SF']+0.001)
 new_features_train_df['1/distance_to_LA'] = 1 / \
     (train_df['distance_to_LA']+0.001)
+
 new_features_train_df['log_distance_to_SF'] = np.log1p(
     train_df['distance_to_SF'])
 new_features_train_df['log_distance_to_LA'] = np.log1p(
@@ -313,11 +313,20 @@ for feature in new_features_train_df.columns:
 # We have got 5 new good features. Let's update our X variable
 
 
-final_ds = pd.concat([train_df[dummies_names+['age_clipped', 'median_house_value']],
+final_train_ds = pd.concat([train_df[dummies_names+['age_clipped', 'median_house_value']],
                X_train_scaled,
                new_features_train_df[new_features_list]
                ],
               axis=1).reset_index(drop=True)
 
+
+final_test_ds = pd.concat([test_df[dummies_names+['age_clipped', 'median_house_value']],
+               X_test_scaled,
+               new_features_test_df[new_features_list]
+               ],
+              axis=1).reset_index(drop=True)
+
+
 # Save the final dataset
-final_ds.to_csv(os.path.join(PATH_TO_DATA, 'final_ds.csv'), index=False)
+final_train_ds.to_csv(os.path.join(PATH_TO_DATA, 'final_train_ds.csv'), index=False)
+final_test_ds.to_csv(os.path.join(PATH_TO_DATA, 'final_test_ds.csv'), index=False)
