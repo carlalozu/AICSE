@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 
 torch.autograd.set_detect_anomaly(True)
 torch.manual_seed(128)
+plt.rcParams.update({'font.size': 14})
 
 
 class PINNTrainer:
@@ -314,7 +315,7 @@ class PINNTrainer:
     def plot(self, inputs, outputs):
         """Create plot"""
         labels = ["$T_f$", "$T_s$"]
-        fig , axs = plt.subplots(1, 2, figsize=(16, 6), dpi=150, frameon=False)
+        fig, axs = plt.subplots(1, 2, figsize=(18, 5), dpi=100, frameon=False)
 
         for i in range(2):
             im = axs[i].scatter(
@@ -331,16 +332,19 @@ class PINNTrainer:
 
         plt.colorbar(im, ax=axs)
         plt.show()
+        plt.tight_layout()
         return fig
 
     def plot_loss_function(self, hist):
         """Function to plot the loss function"""
-        plt.figure(dpi=100)
+        fig = plt.figure(dpi=100, figsize=(7, 4), frameon=False)
         plt.grid(True, which="both", ls=":")
-        plt.plot(np.arange(1, len(hist) + 1), hist, label="Train Loss")
+        plt.plot(np.arange(1, len(hist) + 1), hist)
         plt.xscale("log")
         plt.xlabel("Iteration")
         plt.ylabel("Log loss")
         plt.legend()
+        plt.tight_layout()
         plt.show()
+        return fig
 
