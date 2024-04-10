@@ -48,8 +48,11 @@ class PinnTrainer:
         a = dataset_test.drop('median_house_value', axis=1).values
         a = np.vstack(a).astype(np.float32)
         input_test = torch.from_numpy(a)
+
         output_test = torch.tensor(
             dataset_test['median_house_value'].values, dtype=torch.float32).reshape(-1, 1)
+        
+
         output_test_minmax = self.minmax_scaler.transform(output_test)
         output_test_minmax = torch.tensor(output_test_minmax.flatten(), dtype=torch.float32)
 
@@ -107,6 +110,7 @@ class PinnTrainer:
                 correct += (rmse < 0.1).sum().item()
                 n += 1
 
+        # TODO: correct this, a bit meaningless
         accuracy = 100 * correct / n
         print(f'Accuracy: {accuracy:.2f}%')
         print(f'RMSE: {total_rmse/n:.2f}')
