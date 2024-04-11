@@ -441,39 +441,49 @@ class Pinns:
 
         return history
 
-    def plot(self, **kwargs):
-        """Create plot"""
+    def approximate_random(self):
+        """Create plot based on random sobolen sequence"""
         inputs = self.convert(self.soboleng.draw(100000))
         output_tf = self.approximate_solution(inputs)
         output_ts = self.approximate_coefficient(inputs)
+        outputs = torch.cat([output_tf, output_ts], 1)
+        return  inputs, outputs
 
-        output = torch.cat([output_tf, output_ts], 1)
-        labels = ["T_f", "T_s"]
-        _, axs = plt.subplots(1, 2, figsize=(16, 6), dpi=100)
-        # lims = [(1, 4), (1, 3)]
+    def plot(self, inputs, outputs):
+        """Create plot"""
+        labels = ["$T_f$", "$T_s$"]
+        fig, axs = plt.subplots(1, 2, figsize=(18, 5), dpi=100, frameon=False)
+
         for i in range(2):
             im = axs[i].scatter(
-                inputs[:, 0].detach(),
                 inputs[:, 1].detach(),
-                c=output[:, i].detach(),
+                inputs[:, 0].detach(),
+                c=outputs[:, i].detach(),
                 cmap="jet",
-                **kwargs
+                clim=(1, 4)
             )
-            axs[i].set_xlabel("t")
-            axs[i].set_ylabel("x")
+            axs[i].set_xlabel("x")
+            axs[i].set_ylabel("t")
             axs[i].grid(True, which="both", ls=":")
-            axs[i].set_title(f"Approximate Solution {labels[i]}")
+            axs[i].set_title(labels[i])
             plt.colorbar(im, ax=axs[i])
+
         plt.show()
+        plt.tight_layout()
+        return fig
 
     def plot_loss_function(self, hist):
-
-        plt.figure(dpi=100)
+        """Function to plot the loss function"""
+        fig = plt.figure(dpi=100, figsize=(7, 4), frameon=False)
         plt.grid(True, which="both", ls=":")
-        plt.plot(np.arange(1, len(hist) + 1), hist, label="Train Loss")
+        plt.plot(np.arange(1, len(hist) + 1), hist)
         plt.xscale("log")
+        plt.xlabel("Iteration")
+        plt.ylabel("Log loss")
         plt.legend()
+        plt.tight_layout()
         plt.show()
+        return fig
 
     def plot_reference(self, **kwargs):
         input_meas_, output_meas_ = self.get_measurement_data()
