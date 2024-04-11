@@ -5,6 +5,7 @@ from neural_net import NeuralNet
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+plt.rcParams.update({'font.size': 14})
 
 
 class Pinns:
@@ -40,9 +41,6 @@ class Pinns:
 
         # Parameter to balance role of data and PDE
         self.lambda_u = 10
-
-        ########################################################
-        # Create FF Dense NNs for approximate solution and approximate coefficient
 
         # FF Dense NN to approximate the solution of the underlying heat equation
         self.approximate_solution = NeuralNet(
@@ -234,7 +232,6 @@ class Pinns:
         bound_xLs = []
         i = 0
         for phase in range(self.t0, self.tf):
-            # print("Time: ", phase)
 
             lims = (i*self.n_sb_cycles, (i+1)*self.n_sb_cycles)
 
@@ -379,10 +376,9 @@ class Pinns:
 
         return loss
 
-    def fit(self, num_epochs, max_iter=5000, verbose=True):
+    def fit(self, num_epochs, max_iter=1000, verbose=True):
         """Function to fit the PINN"""
 
-        ########################################################
         optimizer = torch.optim.LBFGS(
             list(self.approximate_solution.parameters()) +
             list(self.approximate_coefficient.parameters()),
@@ -393,7 +389,6 @@ class Pinns:
             line_search_fn="strong_wolfe",
             tolerance_change=1.0 * np.finfo(float).eps
         )
-        ########################################################
 
         history = []
         inp_train_sb = None
@@ -452,29 +447,29 @@ class Pinns:
     def plot(self, inputs, outputs):
         """Create plot"""
         labels = ["$T_f$", "$T_s$"]
-        fig, axs = plt.subplots(1, 2, figsize=(18, 5), dpi=100, frameon=False)
+        fig, axs = plt.subplots(1, 2, figsize=(18, 6), dpi=120, frameon=False)
 
         for i in range(2):
             im = axs[i].scatter(
-                inputs[:, 1].detach(),
                 inputs[:, 0].detach(),
+                inputs[:, 1].detach(),
                 c=outputs[:, i].detach(),
                 cmap="jet",
-                clim=(1, 4)
+                # clim=(1, 4)
             )
-            axs[i].set_xlabel("x")
-            axs[i].set_ylabel("t")
+            axs[i].set_xlabel("t")
+            axs[i].set_ylabel("x")
             axs[i].grid(True, which="both", ls=":")
             axs[i].set_title(labels[i])
             plt.colorbar(im, ax=axs[i])
 
-        plt.show()
         plt.tight_layout()
+        plt.show()
         return fig
 
     def plot_loss_function(self, hist):
         """Function to plot the loss function"""
-        fig = plt.figure(dpi=100, figsize=(7, 4), frameon=False)
+        fig = plt.figure(dpi=120, figsize=(8, 5), frameon=False)
         plt.grid(True, which="both", ls=":")
         plt.plot(np.arange(1, len(hist) + 1), hist)
         plt.xscale("log")
@@ -486,11 +481,12 @@ class Pinns:
         return fig
 
     def plot_reference(self, **kwargs):
-        input_meas_, output_meas_ = self.get_measurement_data()
+        """Function to plot the measured data"""
+        inputs, outputs = self.get_measurement_data()
         plt.scatter(
-            input_meas_[:, 0],
-            input_meas_[:, 1],
-            c=output_meas_,
+            inputs[:, 0],
+            inputs[:, 1],
+            c=outputs,
             cmap="jet",
             **kwargs
         )

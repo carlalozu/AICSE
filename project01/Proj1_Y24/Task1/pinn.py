@@ -331,8 +331,8 @@ class PINNTrainer:
             axs[i].set_title(labels[i])
 
         plt.colorbar(im, ax=axs)
-        plt.show()
         plt.tight_layout()
+        plt.show()
         return fig
 
     def plot_loss_function(self, hist):
