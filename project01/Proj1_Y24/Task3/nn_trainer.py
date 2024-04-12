@@ -10,6 +10,8 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import (
     mean_squared_error, mean_absolute_error, r2_score, root_mean_squared_error)
 
+plt.rcParams.update({'font.size': 14})
+
 
 class NNTrainer:
     """Class to solve a regression problem using a neural net"""
@@ -118,6 +120,7 @@ class NNTrainer:
     def fit(self, num_epochs, verbose=True):
         """Function to fit the PINN"""
 
+        arg_lr = 1e-2
         optimizer = torch.optim.Adam(
             self.network.parameters(),
             lr=1e-2,
@@ -135,6 +138,10 @@ class NNTrainer:
             if verbose:
                 print("################################ ",
                       epoch, " ################################")
+
+            lr = arg_lr * (0.1 ** (epoch // 15))
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = lr
 
             for inp_train, outputs_train in self.dataset_train:
 
@@ -158,14 +165,16 @@ class NNTrainer:
 
     def plot_loss_function(self, hist, **kwargs):
         """Function to plot the loss function"""
-        plt.figure(dpi=100)
+        fig = plt.figure(dpi=120, figsize=(8, 5), frameon=False)
         plt.grid(True, which="both", ls=":")
         plt.plot(np.arange(1, len(hist) + 1), hist, **kwargs)
         plt.xscale("log")
         plt.xlabel("Iteration")
-        plt.ylabel("Train Loss")
+        plt.ylabel("Train loss")
         plt.legend()
+        plt.tight_layout()
         plt.show()
+        return fig
 
     def test_model(self):
         """Function to test the model on the test set for a fold"""

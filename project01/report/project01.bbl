@@ -1,5 +1,10 @@
 \begin{thebibliography}{1}
 
+\bibitem{bajaj2021recipes}
+Chandrajit Bajaj, Luke McLennan, Timothy Andeen, and Avik Roy.
+\newblock Recipes for when physics fails: Recovering robust learning of physics informed neural networks.
+\newblock {\em arXiv preprint arXiv:2110.13330}, 2021.
+
 \bibitem{Larchenko2019}
 Ilialar Larchenko.
 \newblock California housing analysis and preciction.

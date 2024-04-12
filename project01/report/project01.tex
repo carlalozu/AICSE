@@ -6,9 +6,9 @@
 
 
 \setassignment
-\setduedate{Friday 12 April 2024, 23:59 (midnight)}
+\setduedate{Friday 12 April 2024, 23:59}
 
-\serieheader{AI in the Sciences and Engineering}{2024}
+\serieheader{AI in the Sciences and Engineering}{Spring Semster 2024}
             {Student: Carla Judith L\'opez Zurita}
             {}{Project 1}{}
 \newline
@@ -22,7 +22,7 @@ My attempt at solving each of the mentioned tasks will be described in detail be
 
 
 
-\section{Task 1:  PINNs for solving PDEs}
+\section{PINNs for solving PDEs}\label{sec:task1}
 The first task consists in solving the system of equations given by the heat
 equation for a fluid and a solid in a thermal storage. The equations are as follows:
 \begin{equation}
@@ -50,7 +50,8 @@ requiring a derivative. This and all other derivatives required by the system of
 equations were calculated using the autograd function.
 The results of the loss function when training are shown in Figure
 \ref{fig:task1_loss}. The plot shows the loss function decreasing steadily and
-smoothly, reaching a minimum value of $1\times 10^{-04}$.
+smoothly, reaching a minimum value of $1\times 10^{-4.48}$. Training took around 6
+minutes to complete on an M1 processor.
 \begin{figure}[h]
     \centering
     \includegraphics[width=0.6\textwidth]{../Proj1_Y24/Task1/loss.pdf}
@@ -69,7 +70,7 @@ and continuous solution that seems to be a good approximation of the real system
 \end{figure}
 
 
-\section{Task 2: PDE-Constrained Inverse Problem}
+\section{PDE-Constrained Inverse Problem}\label{sec:task2}
 In the second task, the goal is to solve an inverse problem for the following
 equation,
 \begin{equation}
@@ -86,12 +87,12 @@ corresponding to the fluid and solid temperatures. The neural network follows a
 similar architecture as the one in Task 1, but has a Tanh activation function
 instead and uses Xavier initialization. 
 The neural network is trained using the
-LBFGS optimizer with 10000 iterations over two epochs, with a learning rate of 0.3. The loss
+LBFGS optimizer with 10,000 iterations over two epochs, with a learning rate of 0.3. The loss
 function is again a custom function that depends on the output of both neural
 networks, the PDEs and the initial and boundary conditions. The plot regarding the loss
 function during training is shown in Figure \ref{fig:task2_loss}. The plot shows
 the loss function decreasing steadily and smoothly, but does not reach such a
-low minimum value as in Task 1, reaching instead a minimum value of $-0.827$.
+low minimum value as in Task 1, reaching instead a minimum value of $1\times 10^{-0.827}$.
 The training took around 30 minutes to complete on an M1 processor.
 \begin{figure}
     \centering
@@ -113,45 +114,109 @@ $T_s$
 shows an interesting pattern that seems to be related to the fluid temperature
 $T_f$.
 
-\section{Task 3: Applied Regression}
+\section{Applied Regression}\label{sec:task3}
 This task consists in solving a regression problem using a neural network. The
-problem is based on the California Housing dataset \cite{wang_california_housing_1990}, and based on the Tutorial
-``California Housing analysis and preciction'' by Larchenko \cite{Larchenko2019}
-. The goal is to predict the
-median house value for California districts, given a set of features. I used the
-ones present on the dataset and derived by Larchenko. The
-dataset is divided into training and testing sets, with 75\% of the data used
-for training and the remaining 25\% for testing. The neural network used for
-this task has a single output and uses the ReLU activation function. The network
-has two hidden layers with 100 neurons each. The network is trained using the
-Adam optimizer with a learning rate of 0.001 and a batch size of 32. The loss
-function used is the mean squared error. 
-The results of the loss function during training are shown in Figure
-\ref{fig:task3_loss}. We can see that the loss function decreases steadily but
-starts to oscillate after a certain number of iterations. The minimum value reached
+problem is based on the California Housing dataset
+\cite{wang_california_housing_1990}.
+The goal is to predict the median value of a house in California, given
+a set of features. 
+For our purposes, the dataset was augmented following the same procedure as the
+one presented in the tutorial
+by Larchenko \cite{Larchenko2019}. 
+All the numerical features except for the target
+variable are normalized before training using the StandardScaler function from
+the scikit-learn library. The target variable is also normalized using the
+MinMaxScaler, but this is done by the trainer since we need to recover the
+original values for the evaluation metrics.
+
+The dataset is split into 75\% training and 25\% testing. The network has one output, uses ReLU activation, and is composed of three hidden layers with double the features' neurons each. It includes a Sigmoid layer for output normalization (0 to 1). The Adam optimizer was used with an adaptive learning rate starting  at $1\times10^{-2}$, decreasing every 15 epochs, and weight decay of $1\times10^{-6}$. The loss function used is the mean squared error.The datasets were assembled using the DataLoader class, with a batch
+size of 150, and pin memory activated. The training is done over 200 epochs, and
+takes less than five minutes to complete on an M1 processor. Loss function results are shown in Figure \ref{fig:task3_loss}.
 \begin{figure}[h]
     \centering
-    \includegraphics[width=0.6\textwidth]{../Proj1_Y24/Task3/loss.png}
-    \caption{Loss function during training.}
+    \includegraphics[width=0.6\textwidth]{../Proj1_Y24/Task3/loss.pdf}
+    \caption{Loss function during training using normalized target variable.}
     \label{fig:task3_loss}
 \end{figure}
-The evaluation metrics for the regression problem are shown in Table \ref{tab:evaluation_metrics}. The metrics show that the model has a good performance, with a low mean squared error and a high R-squared value. The model seems to be a good approximation of the real system.
-\begin{table}[h]
+The evaluation metrics for the regression problem with both the normalized and
+unnormalized values are shown in Table \ref{tab:evaluation_metrics}. 
+\begin{table}[htbp]
     \centering
-    \caption{Evaluation Metrics}
     \begin{tabular}{lcc}
         \hline
-        \textbf{Metric} & \textbf{Normalized Values} & \textbf{Unnormalized Values} \\ \hline
-        Mean Squared Error (MSE) & 0.0114 & 2,692,925,173.81 \\
-        Root Mean Squared Error (RMSE) & 0.107 & 51,893.4 \\
-        Mean Absolute Error (MAE) & 0.0705 & 34,170.62 \\
-        R-squared (R2) & 0.7954 & 0.7954 \\ \hline
+        \textbf{Metric} & \textbf{Normalized} & \textbf{Unnormalized} \\
+        \hline
+        Mean Squared Error (MSE) & 0.0115 & 2,698,856,223.25 \\
+        Root Mean Squared Error (RMSE) & 0.1071 & 51,950.52 \\
+        Mean Absolute Error (MAE) & 0.0697 & 33,781.57 \\
+        R-squared ($R^2$) & 0.7949 & 0.7949 \\
+        \hline
     \end{tabular}
+    \caption{Comparison of Normalized and Unnormalized Performance Metrics}
     \label{tab:evaluation_metrics}
 \end{table}
 
+Despite achieving a minimum MSE around 0.01, the model's evaluation metrics, including mean absolute error and R-squared, indicate good performance but not superior to a gradient boosting model presented by Larchenko. The neural network's RMSE is approximately 52,000, slightly worse than the gradient boosting model's 45,000. This suggests the neural network may have reached a minimum and didn't converge to a better solution.
 
-% \section{Task 4: Robustness of PINNs and Transferability (Optional)}
+\section{Robustness of PINNs and Transferability}\label{sec:task4}
+Taking the elliptic PDE,
+\begin{equation}
+    \nabla \cdot (A(x) \nabla u(x)) = f(x) \quad \text{in} ,\quad B_1,
+\end{equation}
+the following version of the Schauder estimate can be used to establish a bound
+on the $C^1$ norm of the solution $u$ on the subset $B_{1/2}$ of the domain $B_1$,
+\begin{equation}
+    \|u\|_{C^1(B_{1/2})} \leq C_{\epsilon} (\|u\|_{L^\infty(B_1)} + \|f\|_{L^\infty(B_1)}).
+\end{equation}
+We want to establish some bound on $\|u_\theta - u_{\delta}\|_{C^1(B_{1/2})}$,
+where $u_\theta$ and $u_\delta$ are the solutions of the PDE with source terms
+$f_\theta$ and $f_\delta$ respectively.
+% First we analyze the difference of the PINN solutions and the exact solution,
+% \begin{equation}
+%     \nabla \cdot (A(x) \nabla (u - u_\theta)(x)) = f(x) - f_\theta(x)    \quad \text{in} \quad B_1.
+% \end{equation}
+By the triangle inequality,
+\begin{equation}
+    \|u_\theta - u_\delta\|_{C^1(B_1)} \leq  \|u_\delta - u \|_{C^1(B_1)} +  \|u_\theta - u \|_{C^1(B_1)}.
+\end{equation}
+Using the Schauder estimate, we can say that,
+\begin{equation}
+    \|u - u_\delta\|_{C^1(B_{1/2})} \leq C_{\epsilon} (\|u - u_\delta\|_{L^\infty(B_1)} + \|f - f_\delta\|_{L^\infty(B_1)}).
+\end{equation}
+And since we know that $f_\delta := f + \delta \cdot \phi$, with $\phi \leq 1$,
+the $L^\infty$ norm of the difference of the source terms is bounded by $\delta$, 
+\begin{equation}
+    \|u - u_\delta\|_{C^1(B_{1/2})} \leq C_{\epsilon} (\|u - u_\delta\|_{L^\infty(B_1)} + \delta).
+\end{equation}
+We also know that $\|u_\theta - u\|_{C^1(B_1)} < \epsilon$ for some $\epsilon$. And so, putting it all together,
+\begin{equation}
+    \|u_\theta - u_\delta\|_{C^1(B_{1/2})} \leq  C_{\epsilon} (\|u - u_\delta\|_{L^\infty(B_1)} + \delta) + \epsilon.
+\end{equation}
+
+% Qualitatively discuss the robustness of PINNs solutions to perturbations in the
+% source terms / initial data, and suggest some transfer learning strategies.
+
+The established bound can help us analyze the robustness of the PINN solutions
+to perturbations are present.
+It states that the difference between a PINN solution and a perturbed solution is limited by the difference in perturbation, along with $\delta$ and the $\epsilon$. 
+This means that the PINN solution is robust to perturbations in the source
+terms and initial data, as long as these are small. In relation to
+transfer learning strategies, we can use the bound to establish a strategy to
+use the PINN solution for a different problem. Some general stretegies include
+using a petrained model with the exception of the last layer, or some specific
+neurons, as discussed by Desai et al. \cite{bajaj2021recipes}
+
+The fact that the differential operator is a linear, local operator also affects
+the robustness of the PINN solution. This lets us know that the solution of the
+PINN is only affected by the local behavior of the source terms and initial
+data.
+In other words, the solution is robust as long as the perturbations are small
+and local. 
+It can also be improved by using higher-order Sobolev spaces to determine the
+extent of the perturbations, as well as to make sure they are smooth and
+continuous. This will allow us to determine how much they will affect
+higher-order derivative terms, should there be any in the PDE.
+    
 \bibliographystyle{plain}
 \bibliography{bibliography}
 

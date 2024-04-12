@@ -315,23 +315,23 @@ class PINNTrainer:
     def plot(self, inputs, outputs):
         """Create plot"""
         labels = ["$T_f$", "$T_s$"]
-        fig, axs = plt.subplots(1, 2, figsize=(18, 5), dpi=100, frameon=False)
+        fig, axs = plt.subplots(1, 2, figsize=(18, 6), dpi=120, frameon=False)
 
         for i in range(2):
             im = axs[i].scatter(
-                inputs[:, 1].detach(),
                 inputs[:, 0].detach(),
+                inputs[:, 1].detach(),
                 c=outputs[:, i].detach(),
                 cmap="jet",
                 clim=(1, 4)
             )
-            axs[i].set_xlabel("x")
-            axs[i].set_ylabel("t")
+            axs[i].set_xlabel("t")
+            axs[i].set_ylabel("x")
             axs[i].grid(True, which="both", ls=":")
             axs[i].set_title(labels[i])
 
         plt.colorbar(im, ax=axs)
-        plt.tight_layout()
+        # plt.tight_layout()
         plt.show()
         return fig
 
