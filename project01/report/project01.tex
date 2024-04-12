@@ -40,7 +40,7 @@ pytorch.
 The neural network uses SiLU and Linear activation functions and has with adjustable
 number of layers and neurons, for which I chose 2 and 100 respectively. The numbers
 reveal a dense but not very deep network.
-The neural network was trained using the LBFGS optimizer with ten thousand
+The neural network was trained using the LBFGS optimizer with 10,000
 iterations done over a single epoch. The optimizer parameters include a learning rate 
 of 0.5, a history size of 150, with a strong Wolfe condition. The loss
 function is a custom function that consists of the sum of the mean squared
@@ -82,17 +82,17 @@ conditions (Dirichlet nd Von Neumann), as well as values for the time dependent
 parameter $U_f(t)$. These correspond to the different phases of the system,
 namely charging, idle and discharging. The problem is solved by
 training two different neural
-network with the same architecture, each one with a different output
-corresponding to the fluid and solid temperatures. The neural network follows a
+networks with the same architecture, each one with a different output
+corresponding to the fluid and solid temperatures. The neural networks follow a
 similar architecture as the one in Task 1, but has a Tanh activation function
-instead and uses Xavier initialization. 
-The neural network is trained using the
+instead and uses Xavier initialization.
+The neural network were trained using the
 LBFGS optimizer with 10,000 iterations over two epochs, with a learning rate of 0.3. The loss
 function is again a custom function that depends on the output of both neural
 networks, the PDEs and the initial and boundary conditions. The plot regarding the loss
-function during training is shown in Figure \ref{fig:task2_loss}. The plot shows
-the loss function decreasing steadily and smoothly, but does not reach such a
-low minimum value as in Task 1, reaching instead a minimum value of $1\times 10^{-0.827}$.
+function during training is shown in Figure \ref{fig:task2_loss}. The loss
+function decreasing steadily and smoothly, and reaches a minimum value of
+$1\times 10^{-0.827}$.
 The training took around 30 minutes to complete on an M1 processor.
 \begin{figure}
     \centering
@@ -101,7 +101,7 @@ The training took around 30 minutes to complete on an M1 processor.
     \label{fig:task2_loss}
 \end{figure}
 The results of the inverse problem are shown in Figure \ref{fig:task2}. The plot
-show a good approximation of the solid temperature $T_s$ through all 8 phases of
+show a good approximation of the solid temperature $T_s$ through all phases of
 the simulation.
 \begin{figure}[h]
     \centering
@@ -129,9 +129,16 @@ the scikit-learn library. The target variable is also normalized using the
 MinMaxScaler, but this is done by the trainer since we need to recover the
 original values for the evaluation metrics.
 
-The dataset is split into 75\% training and 25\% testing. The network has one output, uses ReLU activation, and is composed of three hidden layers with double the features' neurons each. It includes a Sigmoid layer for output normalization (0 to 1). The Adam optimizer was used with an adaptive learning rate starting  at $1\times10^{-2}$, decreasing every 15 epochs, and weight decay of $1\times10^{-6}$. The loss function used is the mean squared error.The datasets were assembled using the DataLoader class, with a batch
+The dataset is split into 75\% training and 25\% testing. The network has one
+output, uses ReLU activation, and is composed of three hidden layers with double
+the features' neurons each. It includes a Sigmoid layer for output normalization
+(0 to 1). The Adam optimizer was used with an adaptive learning rate starting
+at $1\times10^{-2}$, decreasing every 15 epochs, and weight decay of
+$1\times10^{-6}$. The loss function used is the mean squared error.The datasets
+were assembled using the DataLoader class, with a batch
 size of 150, and pin memory activated. The training is done over 200 epochs, and
-takes less than five minutes to complete on an M1 processor. Loss function results are shown in Figure \ref{fig:task3_loss}.
+takes less than five minutes to complete on an M1 processor. Loss function
+results are shown in Figure \ref{fig:task3_loss}.
 \begin{figure}[h]
     \centering
     \includegraphics[width=0.6\textwidth]{../Proj1_Y24/Task3/loss.pdf}
@@ -156,7 +163,12 @@ unnormalized values are shown in Table \ref{tab:evaluation_metrics}.
     \label{tab:evaluation_metrics}
 \end{table}
 
-Despite achieving a minimum MSE around 0.01, the model's evaluation metrics, including mean absolute error and R-squared, indicate good performance but not superior to a gradient boosting model presented by Larchenko. The neural network's RMSE is approximately 52,000, slightly worse than the gradient boosting model's 45,000. This suggests the neural network may have reached a minimum and didn't converge to a better solution.
+Despite achieving a minimum MSE around 0.01, the model's evaluation metrics,
+including mean absolute error and R-squared, indicate good performance but not
+superior to a gradient boosting model presented by Larchenko. The neural
+network's RMSE is approximately 52,000, slightly worse than the gradient
+boosting model's 45,000. This suggests the neural network may have reached a
+minimum and didn't converge to a better solution.
 
 \section{Robustness of PINNs and Transferability}\label{sec:task4}
 Taking the elliptic PDE,
@@ -188,7 +200,8 @@ the $L^\infty$ norm of the difference of the source terms is bounded by $\delta$
 \begin{equation}
     \|u - u_\delta\|_{C^1(B_{1/2})} \leq C_{\epsilon} (\|u - u_\delta\|_{L^\infty(B_1)} + \delta).
 \end{equation}
-We also know that $\|u_\theta - u\|_{C^1(B_1)} < \epsilon$ for some $\epsilon$. And so, putting it all together,
+We also know that $\|u_\theta - u\|_{C^1(B_1)} < \epsilon$ for some $\epsilon$.
+And so, putting it all together,
 \begin{equation}
     \|u_\theta - u_\delta\|_{C^1(B_{1/2})} \leq  C_{\epsilon} (\|u - u_\delta\|_{L^\infty(B_1)} + \delta) + \epsilon.
 \end{equation}
@@ -198,7 +211,9 @@ We also know that $\|u_\theta - u\|_{C^1(B_1)} < \epsilon$ for some $\epsilon$. 
 
 The established bound can help us analyze the robustness of the PINN solutions
 to perturbations are present.
-It states that the difference between a PINN solution and a perturbed solution is limited by the difference in perturbation, along with $\delta$ and the $\epsilon$. 
+It states that the difference between a PINN solution and a perturbed solution
+is limited by the difference in perturbation, along with $\delta$ and the
+$\epsilon$.
 This means that the PINN solution is robust to perturbations in the source
 terms and initial data, as long as these are small. In relation to
 transfer learning strategies, we can use the bound to establish a strategy to
