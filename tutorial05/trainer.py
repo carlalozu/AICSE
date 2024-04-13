@@ -12,6 +12,7 @@ np.random.seed(0)
 
 
 class Trainer():
+    """Trainer for the FNO1d model."""
 
     def __init__(self, n_train, modes=16, width=64, batch_size=10):
         self.n_train = n_train
@@ -71,14 +72,14 @@ class Trainer():
         scheduler = torch.optim.lr_scheduler.StepLR(
             optimizer, step_size=step_size, gamma=gamma)
 
-        l = torch.nn.MSELoss()
+        loss = torch.nn.MSELoss()
         freq_print = 1
         for epoch in range(epochs):
             train_mse = 0.0
             for input_batch, output_batch in self.training_set:
                 optimizer.zero_grad()
                 output_pred_batch = self.fno(input_batch).squeeze(2)
-                loss_f = l(output_pred_batch, output_batch)
+                loss_f = loss(output_pred_batch, output_batch)
                 loss_f.backward()
                 optimizer.step()
                 train_mse += loss_f.item()
@@ -91,8 +92,7 @@ class Trainer():
                 test_relative_l2 = 0.0
                 for input_batch, output_batch in self.testing_set:
                     output_pred_batch = self.fno(input_batch).squeeze(2)
-                    loss_f = (torch.mean((output_pred_batch - output_batch) **
-                                         2) / torch.mean(output_batch ** 2)) ** 0.5 * 100
+                    loss_f = self.error(output_pred_batch, output_batch)
                     test_relative_l2 += loss_f.item()
                 test_relative_l2 /= len(self.testing_set)
 

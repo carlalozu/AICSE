@@ -57,18 +57,21 @@ class FNO1d(nn.Module):
         """Implement the forward method using the Fourier 
         and the Linear layer"""
         #################################################
+        # Lifting layer
         x = self.linear_layer(x, self.linear_p)
-        x = self.activation(x)
+        x = x.permute(0, 2, 1)
+        # 3 layers of the integral operators
         x = self.fourier_layer(x, self.spect1, self.lin0)
-        x = self.linear_layer(x, self.lin0)
         x = self.activation(x)
         x = self.fourier_layer(x, self.spect2, self.lin1)
-        x = self.linear_layer(x, self.lin1)
         x = self.activation(x)
         x = self.fourier_layer(x, self.spect3, self.lin2)
-        x = self.linear_layer(x, self.lin2)
         x = self.activation(x)
+        # Projection layer
+        x = x.permute(0, 2, 1)
+
         x = self.linear_layer(x, self.linear_q)
+        x = self.activation(x)
         x = self.output_layer(x)
         #################################################
         return x

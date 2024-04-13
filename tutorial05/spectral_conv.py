@@ -24,23 +24,25 @@ class SpectralConv1d(nn.Module):
         return torch.einsum("bix,iox->box", inputs, weights)
 
     def forward(self, x):
-        """Forward pass of the Fourier layer"""
-
+        """Implement the forward method by:
+        1) Compute Fourier coefficients
+        2) Multiply relevant Fourier modes
+        3) Transform the data to physical space
+        """
         batchsize = x.shape[0]
         # x.shape == [batch_size, in_channels, number of grid points]
 
         ##########################################
-        # TO DO: Implement the forward method by:
-        ##########################################
-        # 1) Compute Fourier coefficients
-        # 2) Multiply relevant Fourier modes
-        # 3) Transform the data to physical space
-        # HINT: Use torch.fft library torch.fft.rfft
-
         # Compute Fourier coefficients
+        x_ft = torch.fft.rfft(x)
 
         # Multiply relevant Fourier modes
+        out_ft = torch.zeros(batchsize, self.out_channels,
+                             x.size(-1) // 2 + 1, device=x.device, dtype=torch.cfloat)
+        out_ft[:, :, :self.modes1] = self.compl_mul1d(
+            x_ft[:, :, :self.modes1], self.weights1)
 
         # Return to physical space
-
+        x = torch.fft.irfft(out_ft, n=x.size(-1))
+        ##########################################
         return x
