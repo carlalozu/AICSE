@@ -6,6 +6,8 @@ from spectral_conv import SpectralConv1d
 
 
 class FNO1d(nn.Module):
+    """Fourier Neural Operator for 1D PDEs."""
+
     def __init__(self, modes, width):
         """
         The overall network. It contains 4 layers of the Fourier layer.
@@ -16,10 +18,10 @@ class FNO1d(nn.Module):
 
         input: the solution of the initial condition and location (a(x), x)
         input shape: (batchsize, x=s, c=2)
-        output: the solution of a later timestep
+        output: the solution of a later time step
         output shape: (batchsize, x=s, c=1)
         """
-        super(FNO1d, self).__init__()
+        super().__init__()
 
         self.modes1 = modes
         self.width = width
@@ -40,22 +42,33 @@ class FNO1d(nn.Module):
         self.activation = torch.nn.Tanh()
 
     def fourier_layer(self, x, spectral_layer, conv_layer):
+        """Implement the Fourier layer"""
         ##########################################
-        # TO DO: Implement the Fourier layer:
+        return spectral_layer(x) + conv_layer(x)
         ##########################################
-        pass
 
     def linear_layer(self, x, linear_transformation):
+        """Implement the Linear layer"""
         ##########################################
-        # TO DO: Implement the Linear layer:
+        return linear_transformation(x)
         ##########################################
-        pass
 
     def forward(self, x):
-
+        """Implement the forward method using the Fourier 
+        and the Linear layer"""
         #################################################
-        # TO DO: Implement the forward method
-        #        using the Fourier and the Linear layer:
+        x = self.linear_layer(x, self.linear_p)
+        x = self.activation(x)
+        x = self.fourier_layer(x, self.spect1, self.lin0)
+        x = self.linear_layer(x, self.lin0)
+        x = self.activation(x)
+        x = self.fourier_layer(x, self.spect2, self.lin1)
+        x = self.linear_layer(x, self.lin1)
+        x = self.activation(x)
+        x = self.fourier_layer(x, self.spect3, self.lin2)
+        x = self.linear_layer(x, self.lin2)
+        x = self.activation(x)
+        x = self.linear_layer(x, self.linear_q)
+        x = self.output_layer(x)
         #################################################
-
         return x
