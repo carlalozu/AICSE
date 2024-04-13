@@ -4,21 +4,18 @@ from torch import nn
 
 def activation(name):
     """Activation function factory."""
-    if name in ['tanh', 'Tanh']:
-        return nn.Tanh()
-    elif name in ['relu', 'ReLU']:
-        return nn.ReLU(inplace=True)
-    elif name in ['lrelu', 'LReLU']:
-        return nn.LeakyReLU(inplace=True)
-    elif name in ['sigmoid', 'Sigmoid']:
-        return nn.Sigmoid()
-    elif name in ['softplus', 'Softplus']:
-        return nn.Softplus(beta=4)
-    elif name in ['celu', 'CeLU']:
-        return nn.CELU()
-    elif name in ['elu']:
-        return nn.ELU()
-    elif name in ['mish']:
-        return nn.Mish()
-    else:
-        raise ValueError('Unknown activation function')
+    name = name.lower()
+    activation_functions = {
+        'tanh': nn.Tanh(),
+        'relu': nn.ReLU(inplace=True),
+        'lelu': nn.LeakyReLU(inplace=True),
+        'sigmoid': nn.Sigmoid(),
+        'softplus': nn.Softplus(beta=4),
+        'celu': nn.CELU(),
+        'elu': nn.ELU(),
+        'mish': nn.Mish(),
+    }
+    if name in activation_functions:
+        return activation_functions[name]
+
+    raise ValueError('Unknown activation function')
