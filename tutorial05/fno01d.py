@@ -1,0 +1,61 @@
+"""Fourier Neural Operator for parametrized PDEs."""
+import torch
+from torch import nn
+
+from spectral_conv import SpectralConv1d
+
+
+class FNO1d(nn.Module):
+    def __init__(self, modes, width):
+        """
+        The overall network. It contains 4 layers of the Fourier layer.
+        1. Lift the input to the desire channel dimension by self.fc0 .
+        2. 4 layers of the integral operators u' = (W + K)(u).
+            W defined by self.w; K defined by self.conv .
+        3. Project from the channel space to the output space by self.fc1 and self.fc2 .
+
+        input: the solution of the initial condition and location (a(x), x)
+        input shape: (batchsize, x=s, c=2)
+        output: the solution of a later timestep
+        output shape: (batchsize, x=s, c=1)
+        """
+        super(FNO1d, self).__init__()
+
+        self.modes1 = modes
+        self.width = width
+        self.padding = 1  # pad the domain if input is non-periodic
+        # input channel is 2: (u0(x), x) --> GRID IS INCLUDED!
+        self.linear_p = nn.Linear(2, self.width)
+
+        self.spect1 = SpectralConv1d(self.width, self.width, self.modes1)
+        self.spect2 = SpectralConv1d(self.width, self.width, self.modes1)
+        self.spect3 = SpectralConv1d(self.width, self.width, self.modes1)
+        self.lin0 = nn.Conv1d(self.width, self.width, 1)
+        self.lin1 = nn.Conv1d(self.width, self.width, 1)
+        self.lin2 = nn.Conv1d(self.width, self.width, 1)
+
+        self.linear_q = nn.Linear(self.width, 32)
+        self.output_layer = nn.Linear(32, 1)
+
+        self.activation = torch.nn.Tanh()
+
+    def fourier_layer(self, x, spectral_layer, conv_layer):
+        ##########################################
+        # TO DO: Implement the Fourier layer:
+        ##########################################
+        pass
+
+    def linear_layer(self, x, linear_transformation):
+        ##########################################
+        # TO DO: Implement the Linear layer:
+        ##########################################
+        pass
+
+    def forward(self, x):
+
+        #################################################
+        # TO DO: Implement the forward method
+        #        using the Fourier and the Linear layer:
+        #################################################
+
+        return x
