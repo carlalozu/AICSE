@@ -4,11 +4,11 @@ from torch import nn
 
 
 class SpectralConv1d(nn.Module):
+    """Spectral Convolution Layer in 1d"""
+
     def __init__(self, in_channels, out_channels, modes1):
-        """
-        1D Fourier layer. It does FFT, linear transform, and Inverse FFT.
-        """
-        super(SpectralConv1d, self).__init__()
+        """1D Fourier layer. It does FFT, linear transform, and Inverse FFT."""
+        super().__init__()
 
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -18,12 +18,13 @@ class SpectralConv1d(nn.Module):
         self.weights1 = nn.Parameter(
             self.scale * torch.rand(in_channels, out_channels, self.modes1, dtype=torch.cfloat))
 
-    # Complex multiplication
-    def compl_mul1d(self, input, weights):
+    def compl_mul1d(self, inputs, weights):
+        """Complex multiplication"""
         # (batch, in_channel, x ), (in_channel, out_channel, x) -> (batch, out_channel, x)
-        return torch.einsum("bix,iox->box", input, weights)
+        return torch.einsum("bix,iox->box", inputs, weights)
 
     def forward(self, x):
+        """Forward pass of the Fourier layer"""
 
         batchsize = x.shape[0]
         # x.shape == [batch_size, in_channels, number of grid points]
