@@ -1,12 +1,10 @@
 import torch
 from torch import nn
 
-# ---------------------
-# Activation Function:
-# ---------------------
-
 
 class CNO_LReLu(nn.Module):
+    """Activation Function"""
+
     def __init__(self,
                  in_size,
                  out_size
@@ -18,25 +16,22 @@ class CNO_LReLu(nn.Module):
         self.act = nn.LeakyReLU()
 
     def forward(self, x):
-
-        ##################
-        # TO DO: Implement CNO activation function (3 steps)
-        #        (1) Upsample the signal x.unsqueeze(2) to the resolution 2 x in_size
-        #            HINT: Use F.interpolate in 'bicubic' mode with antialis = True
-        #        (2) Apply activation
-        #        (3) Downsample the signal x to the resolution out_size (similar to (1))
-        #        Don't forget to return x[:,:,0] --> You unsqueezed the signal in (1)
-        ###################
+        """
+        TO DO: Implement CNO activation function (3 steps)
+               (1) Upsample the signal x.unsqueeze(2) to the resolution 2 x in_size
+                   HINT: Use F.interpolate in 'bicubic' mode with antialis = True
+               (2) Apply activation
+               (3) Downsample the signal x to the resolution out_size (similar to (1))
+               Don't forget to return x[:,:,0] --> You unsqueezed the signal in (1)
+        """
         # Check you dimensions in the code block below (apply CNO_LReLu to a random signal)
 
         return None
 
-# --------------------
-# CNO Block:
-# --------------------
-
 
 class CNOBlock(nn.Module):
+    """CNO Block"""
+
     def __init__(self,
                  in_channels,
                  out_channels,
@@ -69,21 +64,18 @@ class CNOBlock(nn.Module):
                              out_size=self.out_size)
 
     def forward(self, x):
-
-        ##################
-        # TO DO: Implement CNOBlock forward
-        # Hint: Conv -> BN -> Activation
-        ##################
+        """
+        TO DO: Implement CNOBlock forward
+        Hint: Conv -> BN -> Activation
+        """
         # Check you dimensions in the code block below (apply CNOBlock to a random signal)
 
         return None
 
-# --------------------
-# Lift/Project Block:
-# --------------------
-
 
 class LiftProjectBlock(nn.Module):
+    """LiftProject Block"""
+
     def __init__(self,
                  in_channels,
                  out_channels,
@@ -104,21 +96,18 @@ class LiftProjectBlock(nn.Module):
                                            padding=1)
 
     def forward(self, x):
-
-        ##################
-        # TO DO: Implement LiftProjectBlock forward
-        # Hint: inter_CNOBlock -> Conv
-        ##################
+        """
+        TO DO: Implement LiftProjectBlock forward
+        Hint: inter_CNOBlock -> Conv
+        """
         # Check you dimensions in the code block below (apply LiftProjectBlock to a random signal)
 
         return None
 
-# --------------------
-# Residual Block:
-# --------------------
-
 
 class ResidualBlock(nn.Module):
+    """Residual Block"""
+
     def __init__(self,
                  channels,
                  size,
@@ -155,21 +144,18 @@ class ResidualBlock(nn.Module):
                              out_size=self.size)
 
     def forward(self, x):
-
-        ##################
-        # TO DO: Implement ResidualBlock forward
-        # Hint: Conv -> BN -> Activation -> Conv -> BN -> Skip Connection
-        ##################
+        """
+        TO DO: Implement ResidualBlock forward
+        Hint: Conv -> BN -> Activation -> Conv -> BN -> Skip Connection
+        """
         # Check you dimensions in the code block below (apply ResidualBlock to a random signal)
 
         return None
 
-# --------------------
-# ResNet:
-# --------------------
-
 
 class ResNet(nn.Module):
+    """ResNet"""
+
     def __init__(self,
                  channels,
                  size,
@@ -191,11 +177,10 @@ class ResNet(nn.Module):
         self.res_nets = torch.nn.Sequential(*self.res_nets)
 
     def forward(self, x):
-
-        ##################
-        # TO DO: Implement ResNet forwards
-        # Hint: Apply ResidualBlocks num_blocks time
-        ##################
+        """
+        TO DO: Implement ResNet forwards
+        Hint: Apply ResidualBlocks num_blocks time
+        """
         # Check you dimensions in the code block below (apply ResNet to a random signal)
 
         return None

@@ -1,4 +1,4 @@
-""" Let's check our code:"""
+"""Let's check our code"""
 import torch
 from functions import CNO_LReLu, CNOBlock, LiftProjectBlock, ResidualBlock, ResNet
 

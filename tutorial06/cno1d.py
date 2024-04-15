@@ -2,12 +2,10 @@ import torch
 from torch import nn
 from functions import CNOBlock, LiftProjectBlock, ResNet
 
-# --------------------
-# CNO:
-# --------------------
-
 
 class CNO1d(nn.Module):
+    """CNO"""
+
     def __init__(self,
                  in_dim,                    # Number of input channels.
                  out_dim,                   # Number of input channels.
@@ -22,7 +20,7 @@ class CNO1d(nn.Module):
                  use_bn=True,             # Add BN? We do not add BN in lifting/projection layer
                  ):
 
-        super(CNO1d, self).__init__()
+        super().__init__()
 
         self.N_layers = int(N_layers)         # Number od (D) & (U) Blocks
         # Input is lifted to the half of channel_multiplier dimension
@@ -75,7 +73,8 @@ class CNO1d(nn.Module):
                                                 use_bn=use_bn))
                                       for i in range(self.N_layers)])
 
-        # After the ResNets are executed, the sizes of encoder and decoder might not match (if out_size>1)
+        # After the ResNets are executed, the sizes of encoder and decoder might
+        #  not match (if out_size>1)
         # We must ensure that the sizes are the same, by aplying CNO Blocks
         self.ED_expansion = nn.ModuleList([(CNOBlock(in_channels=self.encoder_features[i],
                                                      out_channels=self.encoder_features[i],
@@ -91,12 +90,13 @@ class CNO1d(nn.Module):
                                                 use_bn=use_bn))
                                       for i in range(self.N_layers)])
 
-        ####################### Define ResNets Blocks ################################################################
+        ####################### Define ResNets Blocks ###########################
 
         # Here, we define ResNet Blocks.
 
         # Operator UNet:
-        # Outputs of the middle networks are patched (or padded) to corresponding sets of feature maps in the decoder
+        # Outputs of the middle networks are patched (or padded) to corresponding
+        # sets of feature maps in the decoder
 
         self.res_nets = []
         self.N_res = int(N_res)
