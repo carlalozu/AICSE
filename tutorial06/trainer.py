@@ -17,6 +17,8 @@ class Trainer():
     def __init__(self, n_train, s, N_layers=4,
                  N_res=4, N_res_neck=4, channel_multiplier=16, batch_size=10):
         self.n_train = n_train
+        self.s = s
+
         self.training_set, self.testing_set = self.assemble_datasets(
             batch_size)
 
@@ -36,8 +38,6 @@ class Trainer():
             # How the number of channels evolve?
             channel_multiplier=channel_multiplier,
             use_bn=False)
-
-        self.s = s
 
     def assemble_datasets(self, batch_size=10):
         """Load the data and prepare the datasets."""
