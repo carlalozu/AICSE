@@ -125,7 +125,7 @@ class Trainer():
     def error(y, y_, p=2):
         """Relative L2 error."""
         err = (torch.mean(abs(y.detach().reshape(-1, ) - y_.detach(
-        ).reshape(-1, ))) / torch.mean(abs(y.detach()) ** p)) ** (1 / p) * 100
+        ).reshape(-1, )) ** p) / torch.mean(abs(y.detach()) ** p)) ** (1 / p) * 100
         return err
 
     def plot(self, idx_data=32):
