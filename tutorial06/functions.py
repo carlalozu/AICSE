@@ -1,3 +1,11 @@
+"""
+In the following module, we will define
+* **CNO LReLu** activation fucntion
+* **CNO building block** (CNOBlock) → Conv1d - BatchNorm - Activation
+* **Lift/Project Block** (Important for embeddings)
+* **Residual Block** → Conv1d - BatchNorm - Activation - Conv1d - BatchNorm - *Skip Connection*
+* **ResNet** → Stacked ResidualBlocks (several blocks applied iteratively)
+"""
 import torch
 from torch import nn
 
@@ -9,7 +17,7 @@ class CNO_LReLu(nn.Module):
                  in_size,
                  out_size
                  ):
-        super(CNO_LReLu, self).__init__()
+        super().__init__()
 
         self.in_size = in_size
         self.out_size = out_size
@@ -17,16 +25,19 @@ class CNO_LReLu(nn.Module):
 
     def forward(self, x):
         """
-        TO DO: Implement CNO activation function (3 steps)
-               (1) Upsample the signal x.unsqueeze(2) to the resolution 2 x in_size
-                   HINT: Use F.interpolate in 'bicubic' mode with antialis = True
-               (2) Apply activation
-               (3) Downsample the signal x to the resolution out_size (similar to (1))
-               Don't forget to return x[:,:,0] --> You unsqueezed the signal in (1)
+        Implement CNO activation function (3 steps)
+            (1) Upsample the signal x.unsqueeze(2) to the resolution 2 x in_size
+                Use F.interpolate in 'bicubic' mode with antialis = True
+            (2) Apply activation
+            (3) Downsample the signal x to the resolution out_size (similar to (1))
+            Don't forget to return x[:,:,0] --> You unsqueezed the signal in (1)
         """
-        # Check you dimensions in the code block below (apply CNO_LReLu to a random signal)
 
-        return None
+        x = x.unsqueeze(2)
+        x = nn.functional.interpolate(x, size = (1,2 * self.in_size), mode='bicubic', antialias=True)
+        x = self.act(x)
+        x = nn.functional.interpolate(x, size = (1,self.out_size), mode='bicubic', antialias=True)
+        return x[:,:,0]
 
 
 class CNOBlock(nn.Module):
@@ -39,7 +50,7 @@ class CNOBlock(nn.Module):
                  out_size,
                  use_bn=True
                  ):
-        super(CNOBlock, self).__init__()
+        super().__init__()
 
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -65,12 +76,14 @@ class CNOBlock(nn.Module):
 
     def forward(self, x):
         """
-        TO DO: Implement CNOBlock forward
-        Hint: Conv -> BN -> Activation
+        Implement CNOBlock forward
+            Conv -> BN -> Activation
         """
-        # Check you dimensions in the code block below (apply CNOBlock to a random signal)
+        x = self.convolution(x)
+        x = self.batch_norm(x)
+        x = self.act(x)
 
-        return None
+        return x
 
 
 class LiftProjectBlock(nn.Module):
@@ -82,7 +95,7 @@ class LiftProjectBlock(nn.Module):
                  size,
                  latent_dim=64
                  ):
-        super(LiftProjectBlock, self).__init__()
+        super().__init__()
 
         self.inter_CNOBlock = CNOBlock(in_channels=in_channels,
                                        out_channels=latent_dim,
@@ -97,12 +110,13 @@ class LiftProjectBlock(nn.Module):
 
     def forward(self, x):
         """
-        TO DO: Implement LiftProjectBlock forward
-        Hint: inter_CNOBlock -> Conv
+        Implement LiftProjectBlock forward
+         inter_CNOBlock -> Conv
         """
-        # Check you dimensions in the code block below (apply LiftProjectBlock to a random signal)
+        x = self.inter_CNOBlock(x)
+        x = self.convolution(x)
 
-        return None
+        return x
 
 
 class ResidualBlock(nn.Module):
@@ -113,7 +127,7 @@ class ResidualBlock(nn.Module):
                  size,
                  use_bn=True
                  ):
-        super(ResidualBlock, self).__init__()
+        super().__init__()
 
         self.channels = channels
         self.size = size
@@ -145,12 +159,19 @@ class ResidualBlock(nn.Module):
 
     def forward(self, x):
         """
-        TO DO: Implement ResidualBlock forward
-        Hint: Conv -> BN -> Activation -> Conv -> BN -> Skip Connection
+        Implement ResidualBlock forward
+          Conv -> BN -> Activation -> Conv -> BN -> Skip Connection
         """
-        # Check you dimensions in the code block below (apply ResidualBlock to a random signal)
+        x_ = self.convolution1(x)
+        x_ = self.batch_norm1(x_)
+        x_ = self.act(x_)
 
-        return None
+        x_ = self.convolution2(x_)
+        x_ = self.batch_norm2(x_)
+        x_ = self.act(x_)
+
+        x = x_ + x
+        return x
 
 
 class ResNet(nn.Module):
@@ -162,7 +183,7 @@ class ResNet(nn.Module):
                  num_blocks,
                  use_bn=True
                  ):
-        super(ResNet, self).__init__()
+        super().__init__()
 
         self.channels = channels
         self.size = size
@@ -178,9 +199,10 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         """
-        TO DO: Implement ResNet forwards
-        Hint: Apply ResidualBlocks num_blocks time
+        Implement ResNet forwards
+          Apply ResidualBlocks num_blocks time
         """
-        # Check you dimensions in the code block below (apply ResNet to a random signal)
+        for res_net in self.res_nets:
+            x = res_net(x)
 
-        return None
+        return x
