@@ -30,19 +30,14 @@ class Trainer():
         # Load the data
         data = pd.read_csv('TrainingData.txt', sep=',')
 
-        x_data = torch.tensor(data[['t', 'tf0']].values, dtype=torch.float32)
+        x_data = torch.tensor(data[['tf0', 't']].values, dtype=torch.float32)
         y_data = torch.tensor(data[['tf0']].values, dtype=torch.float32)
-        y_data = torch.ones(y_data.shape[0], 1)*600
-
-        temporary_tensor = torch.clone(x_data[ :, 0])
-        x_data[:, 0] = x_data[:, 1]
-        x_data[:, 1] = temporary_tensor
 
         self.input_function_train = x_data[:self.n_train, :]
-        self.output_function_train = y_data[:self.n_train, :]
+        self.output_function_train = y_data[self.n_train:self.n_train*2, :]
 
-        self.input_function_test = x_data[self.n_train:, :]
-        self.output_function_test = y_data[self.n_train:, :]
+        self.input_function_test = x_data[self.n_train:self.n_train*2, :]
+        self.output_function_test = y_data[self.n_train*2:self.n_train*3, :]
 
         training_set = DataLoader(TensorDataset(
             self.input_function_train, self.output_function_train),
@@ -55,16 +50,20 @@ class Trainer():
 
     def plot_inputs(self):
         """Plot the input and output functions."""
+        len_ = self.input_function_train.shape[0]
         plt.figure()
         plt.plot(
-            self.input_function_train[:,1],
+            np.linspace(1, len_, len_),
             self.input_function_train[:,0],
-            label="Training Data Fluid Phase")
+            label="t=0")
         plt.plot(
-            self.input_function_train[:,1],
+            np.linspace(1, len_, len_),
             self.output_function_train[:,0],
-            label="Training Data Fluid Phase (t=600)")
+            label="t=600")
         plt.grid(True, which="both", ls=":")
+        plt.xlabel('Time increments')
+        plt.ylabel('Temperature T(0,t)')
+        plt.title('Fluid phase, x=0')
         plt.legend()
 
     def train(self, epochs, learning_rate, step_size, gamma):
@@ -130,6 +129,8 @@ class Trainer():
             input_function_test_n,
             output_function_test_pred_n[:,0],
             label="Approximate Solution", s=8, c="C1")
+        plt.xlabel('Time')
+        plt.ylabel('Temperature')
 
         err = self.error(output_function_test_n, output_function_test_pred_n)
         print("Relative L2 error: ", err.item())

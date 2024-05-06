@@ -38,6 +38,35 @@ class Trainer():
             # How the number of channels evolve?
             channel_multiplier=channel_multiplier,
             use_bn=False)
+        
+    def assemble_datasets(self, batch_size=10):
+        """Load the data and prepare the datasets."""
+
+        # Load the data
+        data = pd.read_csv('TrainingData.txt', sep=',')
+
+        x_data = torch.tensor(data[['t', 'tf0']].values, dtype=torch.float32)
+        y_data = torch.tensor(data[['tf0']].values, dtype=torch.float32)
+        y_data = torch.ones(y_data.shape[0], 1)*600
+
+        temporary_tensor = torch.clone(x_data[ :, 0])
+        x_data[:, 0] = x_data[:, 1]
+        x_data[:, 1] = temporary_tensor
+
+        self.input_function_train = x_data[:self.n_train, :]
+        self.output_function_train = y_data[:self.n_train, :]
+
+        self.input_function_test = x_data[self.n_train:, :]
+        self.output_function_test = y_data[self.n_train:, :]
+
+        training_set = DataLoader(TensorDataset(
+            self.input_function_train, self.output_function_train),
+            batch_size=batch_size, shuffle=True)
+        testing_set = DataLoader(TensorDataset(
+            self.input_function_test, self.output_function_test),
+            batch_size=batch_size, shuffle=False)
+
+        return training_set, testing_set
 
     def assemble_datasets(self, batch_size=10):
         """Load the data and prepare the datasets."""

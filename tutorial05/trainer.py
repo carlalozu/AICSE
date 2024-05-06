@@ -56,12 +56,14 @@ class Trainer():
         plt.plot(
             np.linspace(-1, 1, self.input_function_train.shape[1]),
             self.input_function_train[id_sample, :, 0],
-            label="input:  $u(t = 0)$")
+            label="input:  $t = 0$")
         plt.plot(
             np.linspace(-1, 1, self.input_function_train.shape[1]),
             self.output_function_train[id_sample, :],
-            label="output: $u(t = 1)$")
+            label="output: $t = 1$")
         plt.grid(True, which="both", ls=":")
+        plt.xlabel("x")
+        plt.ylabel("u(x, t)")
         plt.legend()
 
     def train(self, epochs, learning_rate, step_size, gamma):
@@ -129,6 +131,8 @@ class Trainer():
             input_function_test_n[0, :, 1].detach(),
             output_function_test_pred_n[0].detach(),
             label="Approximate Solution", s=8, c="C1")
+        plt.xlabel("x")
+        plt.ylabel("u(x, 1)")
 
         err = self.error(output_function_test_n, output_function_test_pred_n)
         print("Relative L2 error: ", err.item())
