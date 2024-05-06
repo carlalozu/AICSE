@@ -20,7 +20,7 @@ class Trainer():
         self.training_set, self.testing_set = self.assemble_datasets(
             batch_size)
 
-        self.fno = FNO1d(modes, batch_size)  # model
+        self.fno = FNO1d(modes, width)  # model
 
 
 
@@ -30,13 +30,18 @@ class Trainer():
         # Load the data
         data = pd.read_csv('TrainingData.txt', sep=',')
 
-        x_data = torch.tensor(data['t'], dtype=torch.float32).reshape(-1, 1)
-        y_data = torch.tensor(data[['tf0', 'ts0']].values, dtype=torch.float32)
+        x_data = torch.tensor(data[['t', 'tf0']].values, dtype=torch.float32)
+        y_data = torch.tensor(data[['tf0']].values, dtype=torch.float32)
+        y_data = torch.ones(y_data.shape[0], 1)*600
 
-        self.input_function_train = x_data[:self.n_train]
+        temporary_tensor = torch.clone(x_data[ :, 0])
+        x_data[:, 0] = x_data[:, 1]
+        x_data[:, 1] = temporary_tensor
+
+        self.input_function_train = x_data[:self.n_train, :]
         self.output_function_train = y_data[:self.n_train, :]
 
-        self.input_function_test = x_data[self.n_train:]
+        self.input_function_test = x_data[self.n_train:, :]
         self.output_function_test = y_data[self.n_train:, :]
 
         training_set = DataLoader(TensorDataset(
@@ -52,13 +57,13 @@ class Trainer():
         """Plot the input and output functions."""
         plt.figure()
         plt.plot(
-            self.input_function_train,
-            self.output_function_train[:,0],
+            self.input_function_train[:,1],
+            self.input_function_train[:,0],
             label="Training Data Fluid Phase")
         plt.plot(
-            self.input_function_train,
-            self.output_function_train[:,1],
-            label="Training Data Solid Phase")
+            self.input_function_train[:,1],
+            self.output_function_train[:,0],
+            label="Training Data Fluid Phase (t=600)")
         plt.grid(True, which="both", ls=":")
         plt.legend()
 
