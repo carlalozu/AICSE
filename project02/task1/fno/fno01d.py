@@ -26,8 +26,9 @@ class FNO1d(nn.Module):
         self.modes1 = modes
         self.width = width
         self.padding = 1  # pad the domain if input is non-periodic
-        # input channel is 2: (u0(x), x) --> GRID IS INCLUDED!
-        self.linear_p = nn.Linear(1, self.width)
+
+        # input channel is 3: (Tf(t), Ts(t) t) --> GRID IS INCLUDED!
+        self.linear_p = nn.Linear(3, self.width)
 
         self.spect1 = SpectralConv1d(self.width, self.width, self.modes1)
         self.spect2 = SpectralConv1d(self.width, self.width, self.modes1)
@@ -37,7 +38,7 @@ class FNO1d(nn.Module):
         self.lin2 = nn.Conv1d(self.width, self.width, 1)
 
         self.linear_q = nn.Linear(self.width, 32)
-        self.output_layer = nn.Linear(32, 1)
+        self.output_layer = nn.Linear(32, 2)
 
         self.activation = torch.nn.Tanh()
 
@@ -59,7 +60,7 @@ class FNO1d(nn.Module):
         #################################################
         # Lifting layer
         x = self.linear_layer(x, self.linear_p)
-        x = x.permute(0, 1)
+        x = x.permute(0, 2, 1)
         # 3 layers of the integral operators
         x = self.fourier_layer(x, self.spect1, self.lin0)
         x = self.activation(x)
@@ -68,7 +69,7 @@ class FNO1d(nn.Module):
         x = self.fourier_layer(x, self.spect3, self.lin2)
         x = self.activation(x)
         # Projection layer
-        x = x.permute(0, 1)
+        x = x.permute(0, 2, 1)
 
         x = self.linear_layer(x, self.linear_q)
         x = self.activation(x)
