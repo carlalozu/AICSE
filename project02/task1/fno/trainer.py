@@ -8,6 +8,7 @@ import pandas as pd
 from window_generator import WindowGenerator
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
+from utils import LpLoss
 
 from fno01d import FNO1d
 
@@ -136,7 +137,7 @@ class Trainer():
         scheduler = torch.optim.lr_scheduler.StepLR(
             optimizer, step_size=step_size, gamma=gamma)
 
-        loss = torch.nn.MSELoss()
+        loss = LpLoss(size_average=False)
         freq_print = 1
         for epoch in range(epochs):
             train_mse = 0.0
@@ -168,7 +169,7 @@ class Trainer():
     def error(y, y_, p=2):
         """Relative L2 error."""
         err = (torch.mean(abs(y.reshape(-1, ) - y_.detach(
-        ).reshape(-1, )) ** p) / torch.mean(abs(y.detach()) ** p)) ** (1 / p) * 100
+        ).reshape(-1, )) ** p) / torch.mean(abs(y.detach()) ** p)) ** (1 / p)
         return err
 
     def plot(self, idx=-1):
