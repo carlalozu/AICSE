@@ -30,15 +30,12 @@ class Trainer():
         self.training_set, self.testing_set = self.assemble_datasets()
         self.fno = FNO1d(modes, width)  # model
 
-    def assemble_datasets(self):
-        """Load the data and prepare the datasets."""
-
-        # Load the data
+    def load_data(self):
+        """Load the data and normalize it."""
+        #Retrieve data
         data = pd.read_csv('../TrainingData.txt', sep=',')
 
         # Normalize the data using min-max scaling
-
-        # transform data
         data['tf0'] = self.scaler_tf0.fit_transform(
             data['tf0'].values.reshape(-1, 1))
         data['ts0'] = self.scaler_ts0.fit_transform(
@@ -46,10 +43,39 @@ class Trainer():
         data['t'] = self.scaler_time.fit_transform(
             data['t'].values.reshape(-1, 1))
 
+        # Transform data
         x_data = torch.tensor(data[['tf0', 'ts0', 't']].values, dtype=torch.float32)[
             :-self.window_length, :]
         y_data = torch.tensor(data[['tf0', 'ts0']].values, dtype=torch.float32)[
             self.window_length:, :]
+
+        return x_data, y_data
+
+    def assemble_datasets(self):
+        """Prepare the datasets, without splitting into train and test sets."""
+
+        x_data, y_data = self.load_data()
+        self.input_function_train = x_data
+        self.output_function_train = y_data
+
+        self.input_function_test = x_data
+        self.output_function_test = y_data
+
+        # Call the WindowGenerator class
+        window_generator = WindowGenerator(
+            x_data, y_data, self.window_length, self.window_length, 1, 1)
+        training_set = DataLoader(
+            window_generator, batch_size=self.batch_size, shuffle=True)
+
+        testing_set = DataLoader(
+            window_generator, batch_size=self.batch_size, shuffle=True)
+
+        return training_set, testing_set
+
+    def assemble_datasets_with_split(self):
+        """Load the data and prepare the datasets."""
+
+        x_data, y_data = self.load_data()
 
         data_train, data_test, targets_train, targets_test = train_test_split(
             x_data, y_data, test_size=0.3, shuffle=False)
@@ -145,41 +171,9 @@ class Trainer():
         ).reshape(-1, )) ** p) / torch.mean(abs(y.detach()) ** p)) ** (1 / p) * 100
         return err
 
-#     def plot(self,):
-#         """Plot results"""
-#         input_function_test_n = self.input_function_test[:-self.window_length].reshape(1,-1,3)
-#
-#         output_function_test_n = self.output_function_test[:-self.window_length]
-#         # print(input_function_test_n.shape)
-#         # print(output_function_test_n.shape)
-#
-#         output_function_test_pred_n = self.fno(input_function_test_n)
-#         # Rescale the predictions
-#         output_function_test_pred_n = output_function_test_pred_n.squeeze().detach().numpy()
-#         output_function_test_pred_n_tf0 = self.scaler_tf0.inverse_transform(
-#             output_function_test_pred_n[:, 0])
-#         # print(output_function_test_pred_n.shape)
-#         # print(input_function_test_n[0,:,1])
-#
-#         plt.figure()
-#         plt.grid(True, which="both", ls=":")
-#         plt.plot(
-#             input_function_test_n[:, :, 2].squeeze(),
-#             output_function_test_n[:, 0].squeeze(),
-#             label="True Solution", c="C0", lw=2)
-#         plt.scatter(
-#             input_function_test_n[:, :, 2].squeeze(),
-#             output_function_test_pred_n_tf0,
-#             label="Approximate Solution", s=8, c="C1")
-#         plt.xlabel("x")
-#         plt.ylabel("u(x, 1)")
-#
-#         err = self.error(output_function_test_n, output_function_test_pred_n)
-#         print("Relative L2 error: ", err.item())
-#         plt.legend()
-
     def plot(self, idx=-1):
         for input_batch, output_batch in self.testing_set:
+            plt.figure()
             output_pred_batch = self.fno(input_batch)
 
             x_ax_output = input_batch[idx, -1, 2] + \
@@ -188,11 +182,11 @@ class Trainer():
             plt.plot(input_batch[idx, :, 2], input_batch[idx, :, 0])
             plt.plot(x_ax_output, output_batch[idx, :, 0])
             plt.plot(
-                x_ax_output, output_pred_batch[idx, :, 0].detach().numpy(), label='pred')
+                x_ax_output, output_pred_batch[idx, :, 0].detach().numpy(), label='predicted', linestyle='--')
 
             plt.plot(input_batch[idx, :, 2], input_batch[idx, :, 1])
             plt.plot(x_ax_output, output_batch[idx, :, 1])
             plt.plot(
-                x_ax_output, output_pred_batch[idx, :, 1].detach().numpy(), label='pred')
+                x_ax_output, output_pred_batch[idx, :, 1].detach().numpy(), label='predicted', linestyle='--')
 
             plt.legend()
