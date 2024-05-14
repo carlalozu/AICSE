@@ -54,11 +54,11 @@ class Trainer():
         """Plot the input and output functions."""
         plt.figure()
         plt.plot(
-            np.linspace(-1, 1, self.input_function_train.shape[1]),
+            self.input_function_train[id_sample, :, 1],
             self.input_function_train[id_sample, :, 0],
             label="input:  $t = 0$")
         plt.plot(
-            np.linspace(-1, 1, self.input_function_train.shape[1]),
+            self.input_function_train[id_sample, :, 1],
             self.output_function_train[id_sample, :],
             label="output: $t = 1$")
         plt.grid(True, which="both", ls=":")

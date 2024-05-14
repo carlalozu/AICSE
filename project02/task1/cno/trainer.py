@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch.optim import AdamW
 import matplotlib.pyplot as plt
 from cno1d import CNO1d
+import pandas as pd
 
 torch.manual_seed(0)
 np.random.seed(0)
@@ -18,6 +19,7 @@ class Trainer():
                  N_res=4, N_res_neck=4, channel_multiplier=16, batch_size=10):
         self.n_train = n_train
         self.s = s
+        self.n = 34
 
         self.training_set, self.testing_set = self.assemble_datasets(
             batch_size)
@@ -38,46 +40,18 @@ class Trainer():
             # How the number of channels evolve?
             channel_multiplier=channel_multiplier,
             use_bn=False)
-        
-    def assemble_datasets(self, batch_size=10):
-        """Load the data and prepare the datasets."""
-
-        # Load the data
-        data = pd.read_csv('TrainingData.txt', sep=',')
-
-        x_data = torch.tensor(data[['t', 'tf0']].values, dtype=torch.float32)
-        y_data = torch.tensor(data[['tf0']].values, dtype=torch.float32)
-        y_data = torch.ones(y_data.shape[0], 1)*600
-
-        temporary_tensor = torch.clone(x_data[ :, 0])
-        x_data[:, 0] = x_data[:, 1]
-        x_data[:, 1] = temporary_tensor
-
-        self.input_function_train = x_data[:self.n_train, :]
-        self.output_function_train = y_data[:self.n_train, :]
-
-        self.input_function_test = x_data[self.n_train:, :]
-        self.output_function_test = y_data[self.n_train:, :]
-
-        training_set = DataLoader(TensorDataset(
-            self.input_function_train, self.output_function_train),
-            batch_size=batch_size, shuffle=True)
-        testing_set = DataLoader(TensorDataset(
-            self.input_function_test, self.output_function_test),
-            batch_size=batch_size, shuffle=False)
-
-        return training_set, testing_set
 
     def assemble_datasets(self, batch_size=10):
         """Load the data and prepare the datasets."""
 
         # Load the data
-        # - AC_data_input.npy
-        # - AC_data_output.npy
-        x_data = torch.from_numpy(
-            np.load("AC_data_input.npy")).type(torch.float32)
-        y_data = torch.from_numpy(
-            np.load("AC_data_output.npy")).type(torch.float32)
+        data = pd.read_csv('../TrainingData.txt', sep=',')
+
+        x_data = torch.tensor(data[['tf0', 't']].values, dtype=torch.float32)[:-self.n,:]
+        y_data = torch.tensor(data[['tf0']].values, dtype=torch.float32)[self.n:,:]
+
+        x_data = x_data.reshape(1, -1, 2)
+        y_data = x_data.reshape(1, -1, 1)
 
         x_data = x_data.permute(0, 2, 1)
         y_data = y_data.unsqueeze(1)
@@ -88,8 +62,8 @@ class Trainer():
 
         self.input_function_train = x_data[:self.n_train, :]
         self.output_function_train = y_data[:self.n_train, :]
-        self.input_function_test = x_data[self.n_train:, :]
-        self.output_function_test = y_data[self.n_train:, :]
+        self.input_function_test = x_data[:self.n_train, :]
+        self.output_function_test = y_data[:self.n_train, :]
 
         training_set = DataLoader(TensorDataset(
             self.input_function_train, self.output_function_train),
