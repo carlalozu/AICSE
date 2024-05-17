@@ -44,9 +44,11 @@ class SphericalConv2d(nn.Module):
         """Implement the forward method using the torch harmonics from NVidia."""
         batchsize = x.shape[0]
 
+        # forward and inverse data transform on an equiangular grid
+        sht = th.RealSHT(x.size(-2), x.size(-1), grid="equiangular")
+        isht = th.InverseRealSHT(x.size(-2), x.size(-1), grid="equiangular")
+
         # Spherical harmonic transform
-        # transform data on an equiangular grid
-        sht = th.RealSHT(self.modes1, self.modes2, grid="equiangular")
         x_ft = sht(x)
 
         # Multiply relevant modes
@@ -60,7 +62,4 @@ class SphericalConv2d(nn.Module):
                 x_ft[:, :, -self.modes1:, :self.modes2], self.weights2)
 
         # Return to physical space
-        # inverse spherical harmonic transform
-        isht = th.InverseRealSHT(x.size(-2), x.size(-1))
-        x = isht(out_ft)
-
+        return isht(out_ft)
