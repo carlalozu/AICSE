@@ -139,7 +139,7 @@ class Trainer():
     def error(y, y_, p=2):
         """Relative L2 error."""
         err = (torch.mean(abs(y.detach().reshape(-1, ) - y_.detach(
-        ).reshape(-1, )) ** p) / torch.mean(abs(y.detach()) ** p)) ** (1 / p)
+        ).reshape(-1, )) ** p) / torch.mean(abs(y.detach()) ** p)) ** (1 / p) * 100
         return err
 
     def plot(self, idx_sample=0):
@@ -177,3 +177,15 @@ class Trainer():
         fig.suptitle('Inputs, ground-truth output and prediction.', y=0.98)
         plt.tight_layout()
         fig.show()
+
+    def plot_loss_function(self, hist):
+        """Function to plot the loss function"""
+        plt.figure(dpi=100, figsize=(7, 4), frameon=False)
+        plt.grid(True, which="both", ls=":")
+        plt.plot(np.arange(1, len(hist) + 1), hist)
+        plt.xscale("log")
+        plt.xlabel("Iteration")
+        plt.ylabel("Log loss")
+        plt.legend()
+        plt.tight_layout()
+        plt.show()

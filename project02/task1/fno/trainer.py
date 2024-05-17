@@ -63,30 +63,32 @@ class Trainer():
         x_data, y_data = self.load_data()
 
         window_generator = WindowGenerator(
-            x_data, y_data, self.window_length_in, self.window_length_out, 1, 1)
+            x_data, y_data,
+            self.window_length_in,
+            self.window_length_out,
+            shift=1, stride=1
+        )
 
-        inputs, outputs = ([], [])
-        for inp, out in window_generator:
-            inputs.append(inp)
-            outputs.append(out)
-
-        x_data = torch.stack(inputs)
-        y_data = torch.stack(outputs)
+        inputs, outputs = zip(*window_generator)
 
         data_train, data_test, targets_train, targets_test = train_test_split(
-            x_data, y_data, test_size=0.2, shuffle=True, random_state=42)
+            torch.stack(list(inputs)),
+            torch.stack(list(outputs)),
+            test_size=0.2, shuffle=True,
+        )
 
         self.input_function_train = data_train
         self.output_function_train = targets_train
 
         self.input_function_test = data_test
         self.output_function_test = targets_test
-        # Call the WindowGenerator class
 
         training_set = DataLoader(
-            TensorDataset(data_train, targets_train), batch_size=self.batch_size, shuffle=False)
+            TensorDataset(data_train, targets_train),
+            batch_size=self.batch_size, shuffle=False)
         testing_set = DataLoader(
-            TensorDataset(data_test, targets_test), batch_size=self.batch_size, shuffle=False)
+            TensorDataset(data_test, targets_test),
+            batch_size=self.batch_size, shuffle=False)
 
         return training_set, testing_set
 
@@ -98,25 +100,17 @@ class Trainer():
             x_data[self.window_length_in, 2]
 
         plt.figure()
-        plt.plot(
-            x_data[:, 2],
-            x_data[:, 0],
-            label="inputs for fluid phase")
+        plt.plot(x_data[:, 2], x_data[:, 0],
+                 label="inputs for fluid phase")
 
-        plt.plot(
-            x_data[:, 2],
-            x_data[:, 1],
-            label="inputs for solid phase")
+        plt.plot(x_data[:, 2], x_data[:, 1],
+                 label="inputs for solid phase")
 
-        plt.plot(
-            y_axis,
-            y_data[:, 0],
-            label="outputs for fluid phase", linestyle='--')
+        plt.plot(y_axis, y_data[:, 0],
+                 label="outputs for fluid phase", linestyle='--')
 
-        plt.plot(
-            y_axis,
-            y_data[:, 1],
-            label="outputs for solid phase", linestyle='--')
+        plt.plot(y_axis, y_data[:, 1],
+                 label="outputs for solid phase", linestyle='--')
 
         plt.grid(True, which="both", ls=":")
         plt.xlabel('Time increments')
@@ -201,7 +195,7 @@ class Trainer():
 
     def plot_loss_function(self, hist):
         """Function to plot the loss function"""
-        fig = plt.figure(dpi=100, figsize=(7, 4), frameon=False)
+        plt.figure(dpi=100, figsize=(7, 4), frameon=False)
         plt.grid(True, which="both", ls=":")
         plt.plot(np.arange(1, len(hist) + 1), hist)
         plt.xscale("log")
