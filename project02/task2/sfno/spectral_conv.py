@@ -4,11 +4,10 @@ from torch import nn
 
 
 class SpectralConv2d(nn.Module):
+    """2D Fourier layer. It does FFT, linear transform, and Inverse FFT."""
+
     def __init__(self, in_channels, out_channels, modes1, modes2):
-        """
-        2D Fourier layer. It does FFT, linear transform, and Inverse FFT.    
-        """
-        super(SpectralConv2d, self).__init__()
+        super().__init__()
 
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -16,19 +15,31 @@ class SpectralConv2d(nn.Module):
         self.modes1 = modes1
         self.modes2 = modes2
 
-        self.scale = (1 / (in_channels * out_channels))
+        self.scale = 1 / (in_channels * out_channels)
         self.weights1 = nn.Parameter(
-            self.scale * torch.rand(in_channels, out_channels, self.modes1, self.modes2, dtype=torch.cfloat))
+            self.scale * torch.rand(
+                in_channels, out_channels,
+                self.modes1, self.modes2,
+                dtype=torch.cfloat
+            )
+        )
         self.weights2 = nn.Parameter(
-            self.scale * torch.rand(in_channels, out_channels, self.modes1, self.modes2, dtype=torch.cfloat))
+            self.scale * torch.rand(
+                in_channels, out_channels,
+                self.modes1, self.modes2,
+                dtype=torch.cfloat
+            )
+        )
 
-    # Complex multiplication
     def compl_mul2d(self, inputs, weights):
+        """Complex multiplication"""
         # (batch, in_channel, x,y ), (in_channel, out_channel, x,y) -> (batch, out_channel, x,y)
         return torch.einsum("bixy,ioxy->boxy", inputs, weights)
 
     def forward(self, x):
+        """Implement the forward method using the Fourier layer"""
         batchsize = x.shape[0]
+
         # Compute Fourier coeffcients up to factor of e^(- something constant)
         x_ft = torch.fft.rfft2(x)
 
