@@ -1,17 +1,20 @@
 """Trainer for the FNO1d model."""
 import torch
 import numpy as np
-from torch.utils.data import DataLoader
-from torch.optim import Adam
-import matplotlib.pyplot as plt
 import pandas as pd
-from window_generator import WindowGenerator
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from torch.optim import Adam
+from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
-from utils import LpLoss
 
+from utils import LpLoss
+from window_generator import WindowGenerator
 from fno01d import FNO1d
 
+sns.set(style="white")
 torch.manual_seed(0)
 np.random.seed(0)
 
@@ -20,9 +23,11 @@ class Trainer():
     """Trainer for the FNO1d model."""
 
     def __init__(self, modes=16, width=64, batch_size=10, window_length=34):
+        """Initialize the trainer."""
 
         self.batch_size = batch_size
-        self.window_length = window_length
+        self.window_length_in = window_length
+        self.window_length_out = window_length
 
         self.scaler_tf0 = MinMaxScaler()
         self.scaler_ts0 = MinMaxScaler()
@@ -33,7 +38,7 @@ class Trainer():
 
     def load_data(self):
         """Load the data and normalize it."""
-        #Retrieve data
+        # Retrieve data
         data = pd.read_csv('../TrainingData.txt', sep=',')
 
         # Normalize the data using min-max scaling
@@ -46,9 +51,9 @@ class Trainer():
 
         # Transform data
         x_data = torch.tensor(data[['tf0', 'ts0', 't']].values, dtype=torch.float32)[
-            :-self.window_length, :]
+            :-self.window_length_out, :]
         y_data = torch.tensor(data[['tf0', 'ts0']].values, dtype=torch.float32)[
-            self.window_length:, :]
+            self.window_length_in:, :]
 
         return x_data, y_data
 
@@ -56,72 +61,62 @@ class Trainer():
         """Prepare the datasets, without splitting into train and test sets."""
 
         x_data, y_data = self.load_data()
-        self.input_function_train = x_data
-        self.output_function_train = y_data
 
-        self.input_function_test = x_data
-        self.output_function_test = y_data
-
-        # Call the WindowGenerator class
         window_generator = WindowGenerator(
-            x_data, y_data, self.window_length, self.window_length, 1, 1)
-        training_set = DataLoader(
-            window_generator, batch_size=self.batch_size, shuffle=True)
+            x_data, y_data, self.window_length_in, self.window_length_out, 1, 1)
 
-        testing_set = DataLoader(
-            window_generator, batch_size=self.batch_size, shuffle=True)
+        inputs, outputs = ([], [])
+        for inp, out in window_generator:
+            inputs.append(inp)
+            outputs.append(out)
 
-        return training_set, testing_set
-
-    def assemble_datasets_with_split(self):
-        """Load the data and prepare the datasets."""
-
-        x_data, y_data = self.load_data()
+        x_data = torch.stack(inputs)
+        y_data = torch.stack(outputs)
 
         data_train, data_test, targets_train, targets_test = train_test_split(
-            x_data, y_data, test_size=0.3, shuffle=False)
+            x_data, y_data, test_size=0.2, shuffle=True, random_state=42)
 
         self.input_function_train = data_train
         self.output_function_train = targets_train
 
         self.input_function_test = data_test
         self.output_function_test = targets_test
+        # Call the WindowGenerator class
 
-        window_generator = WindowGenerator(
-            data_train, targets_train, self.window_length, self.window_length, 1, 1)
         training_set = DataLoader(
-            window_generator, batch_size=self.batch_size, shuffle=True)
-
-        window_generator = WindowGenerator(
-            data_test, targets_test, self.window_length, self.window_length, 1, 1)
+            TensorDataset(data_train, targets_train), batch_size=self.batch_size, shuffle=False)
         testing_set = DataLoader(
-            window_generator, batch_size=self.batch_size, shuffle=True)
+            TensorDataset(data_test, targets_test), batch_size=self.batch_size, shuffle=False)
 
         return training_set, testing_set
 
     def plot_inputs(self):
         """Plot the input and output functions."""
+
+        x_data, y_data = self.load_data()
+        y_axis = x_data[:len(y_data[:, 1]), 2] + \
+            x_data[self.window_length_in, 2]
+
         plt.figure()
         plt.plot(
-            self.input_function_train[:, 2],
-            self.input_function_train[:, 0],
-            label="train")
-        plt.plot(
-            self.input_function_test[:, 2],
-            self.input_function_test[:, 0],
-            label="test inputs")
+            x_data[:, 2],
+            x_data[:, 0],
+            label="inputs for fluid phase")
 
         plt.plot(
-            self.input_function_train[:, 2] +
-            self.input_function_train[self.window_length, 2],
-            self.output_function_train[:, 0],
-            label="train outputs", linestyle='--')
+            x_data[:, 2],
+            x_data[:, 1],
+            label="inputs for solid phase")
 
         plt.plot(
-            self.input_function_test[:, 2] +
-            self.input_function_train[self.window_length, 2],
-            self.output_function_test[:, 0],
-            label="test outputs", linestyle='--')
+            y_axis,
+            y_data[:, 0],
+            label="outputs for fluid phase", linestyle='--')
+
+        plt.plot(
+            y_axis,
+            y_data[:, 1],
+            label="outputs for solid phase", linestyle='--')
 
         plt.grid(True, which="both", ls=":")
         plt.xlabel('Time increments')
@@ -139,6 +134,7 @@ class Trainer():
 
         loss = LpLoss(size_average=False)
         freq_print = 1
+        hist = []
         for epoch in range(epochs):
             train_mse = 0.0
             for input_batch, output_batch in self.training_set:
@@ -149,6 +145,7 @@ class Trainer():
                 optimizer.step()
                 train_mse += loss_f.item()
             train_mse /= len(self.training_set)
+            hist.append(train_mse)
 
             scheduler.step()
 
@@ -165,29 +162,51 @@ class Trainer():
                 print("######### Epoch:", epoch, " ######### Train Loss:",
                       train_mse, " ######### Relative L2 Test Norm:", test_relative_l2)
 
+        return hist
+
     @staticmethod
     def error(y, y_, p=2):
         """Relative L2 error."""
         err = (torch.mean(abs(y.reshape(-1, ) - y_.detach(
-        ).reshape(-1, )) ** p) / torch.mean(abs(y.detach()) ** p)) ** (1 / p)
+        ).reshape(-1, )) ** p) / torch.mean(abs(y.detach()) ** p)) ** (1 / p) * 100
         return err
 
-    def plot(self, idx=-1):
+    def plot(self, idx_=-1):
+        """Plot results."""
         for input_batch, output_batch in self.testing_set:
-            plt.figure()
-            output_pred_batch = self.fno(input_batch)
 
-            x_ax_output = input_batch[idx, -1, 2] + \
-                input_batch[idx, :, 2]-input_batch[idx, 0, 2]
+            if idx_ == -1:
+                range_idx = range(input_batch.shape[0])
+            else:
+                range_idx = [idx_]
 
-            plt.plot(input_batch[idx, :, 2], input_batch[idx, :, 0])
-            plt.plot(x_ax_output, output_batch[idx, :, 0])
-            plt.plot(
-                x_ax_output, output_pred_batch[idx, :, 0].detach().numpy(), label='predicted', linestyle='--')
+            for idx in range_idx:
+                plt.figure()
+                output_pred_batch = self.fno(input_batch).detach().numpy()
 
-            plt.plot(input_batch[idx, :, 2], input_batch[idx, :, 1])
-            plt.plot(x_ax_output, output_batch[idx, :, 1])
-            plt.plot(
-                x_ax_output, output_pred_batch[idx, :, 1].detach().numpy(), label='predicted', linestyle='--')
+                x_ax_output = input_batch[idx, -1, 2] + \
+                    input_batch[idx, :, 2]-input_batch[idx, 0, 2]
 
-            plt.legend()
+                plt.plot(input_batch[idx, :, 2], input_batch[idx, :, 0])
+                plt.plot(x_ax_output, output_batch[idx, :, 0])
+                plt.plot(x_ax_output, output_pred_batch[idx, :, 0],
+                         label='predicted ft', linestyle='--')
+
+                plt.plot(input_batch[idx, :, 2], input_batch[idx, :, 1])
+                plt.plot(x_ax_output, output_batch[idx, :, 1])
+                plt.plot(x_ax_output, output_pred_batch[idx, :, 1],
+                         label='predicted fs', linestyle='--')
+
+                plt.legend()
+
+    def plot_loss_function(self, hist):
+        """Function to plot the loss function"""
+        fig = plt.figure(dpi=100, figsize=(7, 4), frameon=False)
+        plt.grid(True, which="both", ls=":")
+        plt.plot(np.arange(1, len(hist) + 1), hist)
+        plt.xscale("log")
+        plt.xlabel("Iteration")
+        plt.ylabel("Log loss")
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
