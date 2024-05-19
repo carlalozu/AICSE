@@ -128,7 +128,7 @@ class Trainer():
 
         loss = LpLoss(size_average=False)
         freq_print = 1
-        hist = []
+        hist_train, hist_test = [], []
         for epoch in range(epochs):
             train_mse = 0.0
             for input_batch, output_batch in self.training_set:
@@ -139,7 +139,7 @@ class Trainer():
                 optimizer.step()
                 train_mse += loss_f.item()
             train_mse /= len(self.training_set)
-            hist.append(train_mse)
+            hist_train.append(train_mse)
 
             scheduler.step()
 
@@ -148,19 +148,20 @@ class Trainer():
                 test_relative_l2 = 0.0
                 for input_batch, output_batch in self.testing_set:
                     output_pred_batch = self.fno(input_batch).squeeze(2)
-                    loss_f = self.error(output_pred_batch, output_batch)
+                    loss_f = self.relative_lp_norm(output_pred_batch, output_batch)
                     test_relative_l2 += loss_f.item()
                 test_relative_l2 /= len(self.testing_set)
+                hist_test.append(test_relative_l2)
 
             if epoch % freq_print == 0:
                 print("######### Epoch:", epoch, " ######### Train Loss:",
                       train_mse, " ######### Relative L2 Test Norm:", test_relative_l2)
 
-        return hist
+        return hist_train, hist_test
 
     @staticmethod
-    def error(y, y_, p=2):
-        """Relative L2 error."""
+    def relative_lp_norm(y, y_, p=2):
+        """Relative Lp norm."""
         err = (torch.mean(abs(y.reshape(-1, ) - y_.detach(
         ).reshape(-1, )) ** p) / torch.mean(abs(y.detach()) ** p)) ** (1 / p) * 100
         return err
@@ -193,12 +194,18 @@ class Trainer():
 
                 plt.legend()
 
-    def plot_loss_function(self, hist):
+
+    def plot_loss_function(self, hist_train, hist_test):
         """Function to plot the loss function"""
+        hist_train = np.array(hist_train)
+        hist_test = np.array(hist_test)
+
         plt.figure(dpi=100, figsize=(7, 4), frameon=False)
         plt.grid(True, which="both", ls=":")
-        plt.plot(np.arange(1, len(hist) + 1), hist)
+        plt.plot(np.arange(1, len(hist_train)+1), hist_train/hist_train[0], label = "Train")
+        plt.plot(np.arange(1, len(hist_test)+1), hist_test/hist_test[0], label = "Test")
         plt.xscale("log")
+        plt.yscale("log")
         plt.xlabel("Iteration")
         plt.ylabel("Log loss")
         plt.legend()

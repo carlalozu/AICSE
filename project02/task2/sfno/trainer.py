@@ -22,8 +22,10 @@ class Trainer():
     def __init__(self, n_train, model):
         self.n_train = n_train
 
-        self.scalers_inputs = [StandardScaler(), StandardScaler(), StandardScaler()]
-        self.scalers_outputs = [StandardScaler(), StandardScaler(), StandardScaler()]
+        self.scalers_inputs = [
+            StandardScaler(), StandardScaler(), StandardScaler()]
+        self.scalers_outputs = [
+            StandardScaler(), StandardScaler(), StandardScaler()]
 
         self.training_set, self.testing_set = self.assemble_datasets()
 
@@ -125,15 +127,19 @@ class Trainer():
             fig, ax = plt.subplots(1, 2, figsize=(7, 3))
             fig.suptitle('Inputs and ground-truth output')
 
-            inputs = inputs_[idx_]
-            outputs = outputs_[idx_]
+            inputs = inputs_[idx_].unsqueeze(0)
+            outputs = outputs_[idx_].unsqueeze(0)
 
-            ax[0].imshow(inputs[:, :, 0])
+            inputs = self._inverse_transform_data(inputs, self.scalers_inputs)
+            outputs = self._inverse_transform_data(
+                outputs, self.scalers_outputs)
+
+            ax[0].imshow(inputs[0, :, :, 0])
             ax[0].set_title('Input x')
             ax[0].set_xticks([])
             ax[0].set_yticks([])
 
-            ax[1].imshow(outputs[:, :, 0])
+            ax[1].imshow(outputs[0, :, :, 0])
             ax[1].set_title('Ground-truth y')
             ax[1].set_xticks([])
             ax[1].set_yticks([])
@@ -152,6 +158,7 @@ class Trainer():
         loss = LpLoss(d=2, p=2, reduction=True)
         freq_print = 1
         hist = []
+        hist_train = []
         for epoch in range(epochs):
             train_mse = 0.0
             for input_batch, output_batch in self.training_set:
@@ -173,20 +180,21 @@ class Trainer():
                     for input_batch, output_batch in self.testing_set[resolution]:
 
                         output_pred_batch = self.model(input_batch).squeeze(2)
-                        loss_f = self.error(output_pred_batch, output_batch)
+                        loss_f = self.relative_lp_norm(output_pred_batch, output_batch)
                         test_relative_ += loss_f.item()
                     test_relative_ /= len(self.testing_set)
                     test_relative_l2 += test_relative_
                 test_relative_l2 /= 2
+                hist_train.append(test_relative_l2)
 
             if epoch % freq_print == 0:
                 print("######### Epoch:", epoch, " ######### Train Loss:",
                       train_mse, " ######### Relative L2 Test Norm:", test_relative_l2)
-        return hist
+        return hist, hist_train
 
     @staticmethod
-    def error(y, y_, p=2):
-        """Relative L2 error."""
+    def relative_lp_norm(y, y_, p=2):
+        """Relative Lp error."""
         err = (torch.mean(abs(y.detach().reshape(-1, ) - y_.detach(
         ).reshape(-1, )) ** p) / torch.mean(abs(y.detach()) ** p)) ** (1 / p) * 100
         return err
@@ -203,6 +211,12 @@ class Trainer():
 
             output_pred_batch = self.model(inputs)
             output_pred_batch = output_pred_batch.detach().cpu()
+
+            inputs = self._inverse_transform_data(inputs, self.scalers_inputs)
+            outputs = self._inverse_transform_data(
+                outputs, self.scalers_outputs)
+            output_pred_batch = self._inverse_transform_data(
+                output_pred_batch, self.scalers_outputs)
 
             ax = fig.add_subplot(2, 3, index*3 + 1)
             ax.imshow(inputs[0, :, :, 0])
@@ -226,12 +240,17 @@ class Trainer():
             plt.tight_layout()
             fig.show()
 
-    def plot_loss_function(self, hist):
+    def plot_loss_function(self, hist_train, hist_test):
         """Function to plot the loss function"""
+        hist_train = np.array(hist_train)
+        hist_test = np.array(hist_test)
+
         plt.figure(dpi=100, figsize=(7, 4), frameon=False)
         plt.grid(True, which="both", ls=":")
-        plt.plot(np.arange(1, len(hist) + 1), hist)
+        plt.plot(np.arange(1, len(hist_train)+1), hist_train/hist_train[0], label = "Train")
+        plt.plot(np.arange(1, len(hist_test)+1), hist_test/hist_test[0], label = "Test")
         plt.xscale("log")
+        plt.yscale("log")
         plt.xlabel("Iteration")
         plt.ylabel("Log loss")
         plt.legend()
