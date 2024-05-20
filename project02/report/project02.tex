@@ -1,5 +1,6 @@
 \documentclass[unicode,11pt,a4paper,oneside,numbers=endperiod,openany]{scrartcl}
-\usepackage{amsmath} % for \text command
+\usepackage{amsmath}
+\usepackage{amssymb}
 \input{assignment.sty}
 
 \begin{document}
@@ -29,13 +30,13 @@ My attempt at solving each of the mentioned tasks will be described in detail be
 The first task is based on the mathematical model of a thermal storage system
 described by the following PDEs:
 \begin{align}
-    \epsilon \rho_f C_f \frac{\partial T_f}{\partial t} + \epsilon \rho_f C_f u_f(t) \frac{\partial T_f}{\partial x} = \lambda_f \frac{\partial^2 T_f}{\partial x^2} - h_v(T_f - T_s) \quad \text{for} \quad x \in [0, L], \quad t \in [0, T],
+    \epsilon \rho_f C_f \frac{\partial T_f}{\partial t} + \epsilon \rho_f C_f u_f(t) \frac{\partial T_f}{\partial x} = \lambda_f \frac{\partial^2 T_f}{\partial x^2} - h_v(T_f - T_s), \quad x \in [0, L], \quad t \in [0, T],
     \\
-    (1-\epsilon)\rho_s C_s\frac{\partial T_s}{\partial t} = \lambda_s \frac{\partial^2 T_s}{\partial x^2} + h_v(T_f - T_s) \quad \text{for} \quad x \in [0, L], \quad t \in [0, T],
+    (1-\epsilon)\rho_s C_s\frac{\partial T_s}{\partial t} = \lambda_s \frac{\partial^2 T_s}{\partial x^2} + h_v(T_f - T_s),  \quad x \in [0, L], \quad t \in [0, T],
 \end{align}
-with $\rho$ being the density of the phases, $C$ the specific heat, $\lambda$ the diffusivity, $\epsilon$ the solid porosity, $u_f$
+with $\rho$ the density of the phases, $C$ the specific heat, $\lambda$ the diffusivity, $\epsilon$ the solid porosity, $u_f$
 the fluid velocity entering the thermal storage and $h_v$ the heat exchange
-coefficient between solid and fluid.
+coefficient.
 The system is also defined with appropriate boundary conditions defined in the
 project description.
 The goal is to predict the fluid and solid temperature at future time steps
@@ -43,10 +44,11 @@ using a Neural Operator.
 One of the main challenges of this task was to arrange the data in the correct
 format to feed it to the network, namely the data had to be arranged in a
 series of windows. I used a window generator to create the windows with a length
-of 34 for both inputs and outputs, which was chosem because it is the size of the
-final prediction we have to make. 
-The outputs were taken from the provided measurements, but corresponding to the
-next 34 time steps. Fig. \ref{fig:window} shows an example of a window with
+of 34 for both inputs and outputs, which was chosen because it is the size of the
+final target prediction. 
+The outputs were taken from the provided measurements, each  corresponding to the
+next 34 time steps of a given time. Fig. \ref{fig:window} shows an example of a
+window with its 
 prediction.
 \begin{figure}[ht!]
     \centering
@@ -57,21 +59,20 @@ prediction.
 
 The data was normalized using the MinMaxScaler from the sklearn library.
 The data was split into training and validation sets with a
-ratio of 80\% and 20\% respectively.
+ratio of 80\% and 20\%.
 I chose to use a Fourier Neural Operator (FNO) to solve this task. I used a
 single network to predict both the fluid ($T_f$) and solid temperature ($T_s$),
 so that it had three
-channels as input ($T_f$, $T_s$ and time) and two channels as output ($T_f$ and
+channels as inputs ($T_f$, $T_s$ and time) and two channels as outputs ($T_f$ and
 $T_s$). 
 The network
 consisted of 3 layers with 3 Fourier features each.
 It was trained using the Adam optimizer with an initial learning rate
 of $10^{-3}$ and a batch size of 10. 
 The learning rate was adjusted using \texttt{StepLR} with step size of 50 and gamma 0.5.
-The loss function used was the L2 norm. 
-The network was trained for 1,000 epochs.
+The loss function used was the L2 norm and it was trained for 1,000 epochs,
+which tool around two minutes on a single core, in a M1 MacBook Pro.
 The loss function of the model during training is shown in Fig. \ref{fig:loss}.
-Traing takes around two minutes on a single core, in a M1 MacBook Pro.
 \begin{figure}[ht!]
     \centering
     \includegraphics[width=0.8\textwidth]{../task1/fno/loss_function.pdf}
@@ -81,8 +82,7 @@ Traing takes around two minutes on a single core, in a M1 MacBook Pro.
 
 The model was evaluated on the test set and the predictions were compared with
 the ground truth. Fig. \ref{fig:predictions} shows the predictions of the model
-taken from various windows in the test set. The dashed lines represent the
-predicted values, while the solid lines depict the ground truth.
+taken from various windows in the test set.
 The model seems to be able to capture the general trend of the data, and predict
 very close values.
 \begin{figure}[ht!]
@@ -180,13 +180,13 @@ the FNO model in Fig. \ref{fig:example_fno2d} and the SFNO model in Fig.
 \ref{fig:example_sfno2d}.
 \begin{figure}[ht!]
     \centering
-    \includegraphics[width=\textwidth]{../task2/sfno/results_4_FNO2d.png}
+    \includegraphics[width=\textwidth]{../task2/sfno/results/results_4_FNO2d.png}
     \caption{Example of the velocity field of water on the sphere using a FNO.}
     \label{fig:example_fno2d}
 \end{figure}
 \begin{figure}[ht!]
     \centering
-    \includegraphics[width=\textwidth]{../task2/sfno/results_1_SFNO2d.png}
+    \includegraphics[width=\textwidth]{../task2/sfno/results/results_1_SFNO2d.png}
     \caption{Example of the velocity field of water on the sphere using a SFNO.}
     \label{fig:example_sfno2d}
 \end{figure}
@@ -199,19 +199,29 @@ More examples of the velocity field of water on the sphere using the FNO model
 and the SFNO model can be found in the \texttt{results} folder attached to this document.
 
 \section{Universal Approximation for CNO}\label{sec:task3}
-Consider the following abstract PDE in the 2d torus $D = T^2$,
+Consider the abstract PDE in the 2d torus $D = \mathbb{T}^2$,
 $\mathcal{L}(u) = 0$, $\mathcal{B}(u) = 0$,
 with $\mathcal{L}$ being a differential operator and $\mathcal{B}$ a boundary operator. We assume that the differential
 operator $\mathcal{L}$ only depends on the coordinate $x$ through a coefficient function
-$a \in H^r(D)$. The corresponding solution operator is denoted by 
+$a \in H^r(D)$. The corresponding \textit{solution} operator is denoted by 
 $\mathcal{G}^{\dagger} : X^* \in H^r(D) \to H^r(D) : a \to u$, with $u$ being the
 solution of the PDE. $H^r(D)$ is Sobolev space of order $r$.
 
 
-The CNO $\mathcal{G}$ is a compositional mapping
-between function spaces. It is defined as $\mathcal{G} = \mathcal{N} \circ \mathcal{G}^{\dagger}$,
-where $\mathcal{N}$ is a neural network. It can have many layers and different
-activation functions. 
+We define the operator $\mathcal{G}: \mathcal{B}_w(D) \to \mathcal{B}_w(D)$ as a
+convolutional neural operator (CNO) which is a compositional mapping between
+functions, built as follows \cite{raonic2023convolutional}
+:
+\begin{align}
+    \mathcal{G} :u\to P(u)=v_0 \to v_1 \to \cdots v_L \to Q(vL)=u,
+\end{align}
+where $P$ and $Q$ are the input and output processing functions, respectively, and $v_l$ are the intermediate feature maps. The CNO is defined as a composition of three types of operators: a convolutional operator $\mathcal{K}_l$, a non-linear activation function $\Sigma_l$ and a pointwise operator $\mathcal{P}_l$.
+\begin{align}
+     v_{l+1} =\mathcal{P}_l \circ
+    \Sigma_l
+    \circ \mathcal{K}_l(v_l), \quad 1\leq l\leq L-1.
+\end{align}
+
 
 The universality theorem for CNO states that for any $\epsilon > 0$ and any
 sufficiently regular operator $\mathcal{G}^{\dagger}$,
@@ -220,24 +230,16 @@ it holds,
 \begin{equation}
     \|\mathcal{G}(a) - \mathcal{G}^{\dagger}(a)\|_{H^r(D)} \leq \epsilon.
 \end{equation}
-In practice, this means that the CNO can approximate the solution operator
-$\mathcal{G}^{\dagger}$ with an arbitrary precision.
+In practice, this means that the CNO can approximate any solution operator
+$\mathcal{G}^{\dagger}$ with an arbitrary precision. This is a powerful result that shows the potential of CNOs in solving PDEs.
 
-\cite{raonic2023convolutional}
 Apart from the condition of sufficiently regular solution operators
 $\mathcal{G}^{\dagger}$, we can impose some additional regularization
 constraints on $\mathcal{G}^{\dagger}$, so that the universality theorem holds.
 For example, we can require that the solution operator $\mathcal{G}^{\dagger}$
 is Lipschitz continuous with respect to the $L^2$ norm. This is a common
-regularization constraint in practice.
-
-The following sketch aims to illustrate the universality theorem for CNO.
-\begin{figure}[ht!]
-    \centering
-    \includegraphics[width=0.4\textwidth]{../task3/universality.png}
-    \caption{Sketch illustrating the universality theorem for CNO.}
-    \label{fig:universality}
-\end{figure}
+regularization constraint in practice. Raonić et al.
+\cite{raonic2023convolutional} also suggest defining an alternate approximation theorem that offers explicit control over the network size and provides upper bounds on the weights.
 
 \bibliographystyle{plain}
 \bibliography{bibliography}
