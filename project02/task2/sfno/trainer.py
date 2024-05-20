@@ -232,7 +232,7 @@ class Trainer():
         hist_train = np.array(hist_train)
         hist_test = np.array(hist_test)
 
-        plt.figure(dpi=100, figsize=(7, 4), frameon=False)
+        plt.figure(dpi=100, figsize=(7, 3), frameon=False)
         plt.grid(True, which="both", ls=":")
         plt.plot(np.arange(1, len(hist_train)+1), hist_train, label = "Train")
         plt.plot(np.arange(1, len(hist_test)+1), hist_test, label = "Validation")
@@ -240,6 +240,7 @@ class Trainer():
         plt.xlabel("Iteration")
         plt.xticks(np.arange(0, len(hist_train) + 1, 2))
         plt.ylabel("Log loss")
+        plt.ylim(0.05, 5)
         plt.legend()
         plt.tight_layout()
         plt.savefig(f"loss_function_{self.model}.pdf")

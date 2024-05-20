@@ -1,10 +1,10 @@
-"""Utils for the tutorial05."""
+"""Utils for the project 2."""
 import torch
-
-# loss function with rel/abs Lp loss
 
 
 class LpLoss(object):
+    """Loss function with rel Lp loss"""
+
     def __init__(self, d=2, p=2, size_average=True, reduction=True):
         super().__init__()
 
@@ -17,6 +17,7 @@ class LpLoss(object):
         self.size_average = size_average
 
     def rel(self, x, y):
+        """Relative Lp loss function."""
         num_examples = x.size()[0]
 
         diff_norms = torch.norm(
