@@ -10,7 +10,8 @@
 
 \serieheader{AI in the Sciences and Engineering}{Spring Semester 2024}
             {Student: Carla Judith L\'opez Zurita}
-            {}{Project 2}
+            {}{Project 2}{}
+\newline
 
 The main objective of the project is to apply the concepts learned in class
 related to Neural Operators. 
@@ -65,9 +66,12 @@ $T_s$).
 The network
 consisted of 3 layers with 3 Fourier features each.
 It was trained using the Adam optimizer with an initial learning rate
-of $10^{-3}$ and a batch size of 10. The loss function used was the L2 norm. The
-network was trained for 500 epochs.
+of $10^{-3}$ and a batch size of 10. 
+The learning rate was adjusted using \texttt{StepLR} with step size of 50 and gamma 0.5.
+The loss function used was the L2 norm. 
+The network was trained for 1,000 epochs.
 The loss function of the model during training is shown in Fig. \ref{fig:loss}.
+Traing takes around two minutes on a single core, in a M1 MacBook Pro.
 \begin{figure}[ht!]
     \centering
     \includegraphics[width=0.8\textwidth]{../task1/fno/loss_function.pdf}
@@ -98,13 +102,142 @@ Fig. \ref{fig:future}.
 \end{figure}
 
 \section{Modeling Water Flow on the Sphere with FNO}\label{sec:task2}
-The next task consists in modeling the water flow on the sphere using a
-Spherical
-Fourier Neural Operator (SFNO) and comparing the results with the ones obtained
-by a baseline neural operator.
+The next task consists in modeling the water flow on the sphere using Neural Operators.
+The idea of the task is to use two different architectures to predict the
+velocity field of the water on the sphere for various resolutions while training
+on a lower resolution. 
+In this manner, we can see how the model generalizes to out of sample data.
+We will implement an Spherical
+Fourier Neural Operator (SFNO) and compare the results with those of a baseline
+neural operator, in this case, a Fourier Neural Operator (FNO).
+The main difference between the two models is that the SFNO uses spherical
+harmonics to represent the data, while the FNO uses Fourier features. This was
+implemented by building a custom layer that computes the spherical harmonics
+using function from Bonev et al's library \cite{bonev2023spherical}.
+The architectures were based on the paper and public code repository by Zongyi
+Li et al \cite{li2020fourier}.
+
+The data was retrieved from the Kossaifi et al's library
+\cite{neuraloperator2024sfno}; it contains the velocity
+field of water on the sphere, as well as the $x$ and $y$ coordinates of the
+sphere.
+The data was split using 200 samples for training with (32, 64) resolution and
+50 samples for validation for (32, 64) and (64, 128) resolutions. It was
+normalized using the StandardScaler from the sklearn library.
+
+The FNO model was trained using Adam optimizer with an initial learning rate of
+$8e^{-4}$ and a batch size of 4 for training and 10 for testing. The learning rate was adjusted using
+\texttt{CosineAnnealingLR} with a $T_{\text{max}}$ of 30. 
+The loss function used was the L2 norm.
+The network was trained for 20 epochs, which took around 20 minutes on a single
+core, in a M1 MacBook Pro. 
+The loss function of the model using FNO during training is shown in Fig.
+\ref{fig:loss_fno2d}.
+The SFNO model was trained using the same parameters as the FNO model, and took
+appropriately the same time to train. The loss function of the model using SFNO
+during training is shown in Fig. \ref{fig:losss_sfno2d}.
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=0.8\textwidth]{../task2/sfno/loss_function_FNO2d.pdf}
+    \caption{Loss function of the FNO model during training.}
+    \label{fig:loss_fno2d}
+\end{figure}
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=0.8\textwidth]{../task2/sfno/loss_function_SFNO2d.pdf}
+    \caption{Loss function of the SFNO model during training.}
+    \label{fig:losss_sfno2d}
+\end{figure}
+We can see that both models converge in a similar manner, but the SFNO
+model seems to reach a lower loss value in the training set, as shown in Table
+\ref{tab:evaluation_metrics}.
+\begin{table}[ht!]
+    \centering
+    \begin{tabular}{lcc}
+        \hline
+        \textbf{Model} & \textbf{Train Norm} & \textbf{Test Norm} \\
+        \hline
+        FNO & 0.086722 & 1.089633 \\
+        SFNO & 0.0726737  & 1.197494 \\
+        \hline
+    \end{tabular}
+    \caption{Value of the relative L2 norm for the FNO and SFNO model after 20 epochs.}
+    \label{tab:evaluation_metrics}
+\end{table}
+Nevertheless, the FNO model seems to generalize better to the validation set.
+It is important to mention that the loss values are directly comparable
+between the two models, since the data and training was handled in the same way.
+It is also reasonable to see why the values of the loss function between
+training and validation sets are different, as the validation set at higher
+resolution is unseen data for the model when training.
+This is bound to give a higher loss value. Training for more epochs did not seem
+to improve the results of both models, even as the loss function of the training
+set kept decreasing, the loss function of the validation set started increasing,
+which is a sign of overfitting.
+
+Finally, we show an example of the velocity field of water on the sphere using
+the FNO model in Fig. \ref{fig:example_fno2d} and the SFNO model in Fig.
+\ref{fig:example_sfno2d}.
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=\textwidth]{../task2/sfno/results_4_FNO2d.png}
+    \caption{Example of the velocity field of water on the sphere using a FNO.}
+    \label{fig:example_fno2d}
+\end{figure}
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=\textwidth]{../task2/sfno/results_1_SFNO2d.png}
+    \caption{Example of the velocity field of water on the sphere using a SFNO.}
+    \label{fig:example_sfno2d}
+\end{figure}
+Qualitatively, both models seem to capture the general trend of the data
+correctly, specially in the resolution they were trained on. Both models seem to
+create some aritifacts in the velocity field, and also seem to retain some more
+details compared to the ground truth. It is hard to say which model is better
+without further analysis.
+More examples of the velocity field of water on the sphere using the FNO model
+and the SFNO model can be found in the \texttt{results} folder attached to this document.
+
+\section{Universal Approximation for CNO}\label{sec:task3}
+Consider the following abstract PDE in the 2d torus $D = T^2$,
+$\mathcal{L}(u) = 0$, $\mathcal{B}(u) = 0$,
+with $\mathcal{L}$ being a differential operator and $\mathcal{B}$ a boundary operator. We assume that the differential
+operator $\mathcal{L}$ only depends on the coordinate $x$ through a coefficient function
+$a \in H^r(D)$. The corresponding solution operator is denoted by 
+$\mathcal{G}^{\dagger} : X^* \in H^r(D) \to H^r(D) : a \to u$, with $u$ being the
+solution of the PDE. $H^r(D)$ is Sobolev space of order $r$.
 
 
-\section{Universal Approximation for CNO (Optional)}\label{sec:task3}
+The CNO $\mathcal{G}$ is a compositional mapping
+between function spaces. It is defined as $\mathcal{G} = \mathcal{N} \circ \mathcal{G}^{\dagger}$,
+where $\mathcal{N}$ is a neural network. It can have many layers and different
+activation functions. 
+
+The universality theorem for CNO states that for any $\epsilon > 0$ and any
+sufficiently regular operator $\mathcal{G}^{\dagger}$,
+there exists a CNO $G$ such that for every $a \in X^*$ with $|a|H^r(D) \leq B$
+it holds,
+\begin{equation}
+    \|\mathcal{G}(a) - \mathcal{G}^{\dagger}(a)\|_{H^r(D)} \leq \epsilon.
+\end{equation}
+In practice, this means that the CNO can approximate the solution operator
+$\mathcal{G}^{\dagger}$ with an arbitrary precision.
+
+\cite{raonic2023convolutional}
+Apart from the condition of sufficiently regular solution operators
+$\mathcal{G}^{\dagger}$, we can impose some additional regularization
+constraints on $\mathcal{G}^{\dagger}$, so that the universality theorem holds.
+For example, we can require that the solution operator $\mathcal{G}^{\dagger}$
+is Lipschitz continuous with respect to the $L^2$ norm. This is a common
+regularization constraint in practice.
+
+The following sketch aims to illustrate the universality theorem for CNO.
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=0.4\textwidth]{../task3/universality.png}
+    \caption{Sketch illustrating the universality theorem for CNO.}
+    \label{fig:universality}
+\end{figure}
 
 \bibliographystyle{plain}
 \bibliography{bibliography}

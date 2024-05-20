@@ -1,3 +1,21 @@
-\begin{thebibliography}{}
+\begin{thebibliography}{1}
+
+\bibitem{bonev2023spherical}
+Boris Bonev, Thorsten Kurth, Christian Hundt, Jaideep Pathak, Maximilian Baust, Karthik Kashinath, and Anima Anandkumar.
+\newblock Spherical fourier neural operators: Learning stable dynamics on the sphere, 2023.
+
+\bibitem{neuraloperator2024sfno}
+Jean Kossaifi, Nikola Kovachki, Zongyi Li, and Anima Anandkumar.
+\newblock Training a sfno on the spherical shallow water equations.
+\newblock \url{https://neuraloperator.github.io/neuraloperator/dev/auto_examples/plot_SFNO_swe.html}, 2024.
+\newblock Accessed: 2024-05-20.
+
+\bibitem{li2020fourier}
+Zongyi Li, Nikola Kovachki, Kamyar Azizzadenesheli, Burigede Liu, Kaushik Bhattacharya, Andrew Stuart, and Anima Anandkumar.
+\newblock Fourier neural operator for parametric partial differential equations, 2020.
+
+\bibitem{raonic2023convolutional}
+Bogdan Raonić, Roberto Molinaro, Tim~De Ryck, Tobias Rohner, Francesca Bartolucci, Rima Alaifari, Siddhartha Mishra, and Emmanuel de~Bézenac.
+\newblock Convolutional neural operators for robust and accurate learning of pdes, 2023.
 
 \end{thebibliography}

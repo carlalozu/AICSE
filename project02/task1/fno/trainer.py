@@ -136,6 +136,7 @@ class Trainer():
         plt.tight_layout()
         plt.savefig('plot_complete.pdf')
         plt.show()
+        return output_pred_batch
 
 
     def train(self, epochs, learning_rate, step_size, gamma, freq_print=1):
@@ -278,8 +279,8 @@ class Trainer():
             output_pred_batch, scalers).squeeze(0)
 
         # Add the axis for the prediction
-        pred_axis = input_batch[:, 2] + \
-            - input_batch[0, 2] + input_batch[-1, 2]
+        pred_axis = input_batch[:, 2] - input_batch[0, 2]
+        pred_axis += input_batch[-1, 2] + pred_axis[1]
         output_pred_batch = torch.cat(
             [output_pred_batch, pred_axis.reshape(-1, 1)], axis=1)
 
