@@ -46,7 +46,11 @@ class FNO2d(nn.Module):
         self.fc1 = nn.Linear(self.width, 128)
         self.fc2 = nn.Linear(128, 3)
 
+    def __str__(self) -> str:
+        return "FNO2d"
+
     def forward(self, x):
+        """Forward pass of the network."""
         x = self.fc0(x)
         x = x.permute(0, 3, 1, 2)
         x = F.pad(x, [0, self.padding, 0, self.padding])
@@ -77,6 +81,7 @@ class FNO2d(nn.Module):
         x = self.fc2(x)
         return x
 
+
 class SFNO2d(FNO2d):
     """The overall network. It contains 4 layers of the Spherical harmonics layer.
     1. Lift the input to the desire channel dimension by self.fc0 .
@@ -101,3 +106,6 @@ class SFNO2d(FNO2d):
             self.width, self.width, self.modes1, self.modes2)
         self.conv3 = SphericalConv2d(
             self.width, self.width, self.modes1, self.modes2)
+
+    def __str__(self) -> str:
+        return "SFNO2d"
