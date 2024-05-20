@@ -117,36 +117,26 @@ class Trainer():
         """Plot the input and output functions."""
 
         inputs_, outputs_ = self.input_function_train, self.output_function_train
-        if idx_sample == -1:
-            range_idx = range(inputs_.shape[0])
-        else:
-            range_idx = [idx_sample]
 
-        for idx_ in range_idx:
+        _, ax = plt.subplots(1, 2, figsize=(7, 3))
+        inputs = inputs_[idx_sample].unsqueeze(0)
+        outputs = outputs_[idx_sample].unsqueeze(0)
 
-            fig, ax = plt.subplots(1, 2, figsize=(7, 3))
-            fig.suptitle('Inputs and ground-truth output')
+        inputs = self._inverse_transform_data(inputs, self.scalers_inputs)
+        outputs = self._inverse_transform_data(
+            outputs, self.scalers_outputs)
 
-            inputs = inputs_[idx_].unsqueeze(0)
-            outputs = outputs_[idx_].unsqueeze(0)
+        ax[0].imshow(inputs[0, :, :, 0])
+        ax[0].set_title('Input')
+        ax[0].set_xticks([])
+        ax[0].set_yticks([])
 
-            inputs = self._inverse_transform_data(inputs, self.scalers_inputs)
-            outputs = self._inverse_transform_data(
-                outputs, self.scalers_outputs)
+        ax[1].imshow(outputs[0, :, :, 0])
+        ax[1].set_title('Ground-truth')
+        ax[1].set_xticks([])
+        ax[1].set_yticks([])
 
-            ax[0].imshow(inputs[0, :, :, 0])
-            ax[0].set_title('Input x')
-            ax[0].set_xticks([])
-            ax[0].set_yticks([])
-
-            ax[1].imshow(outputs[0, :, :, 0])
-            ax[1].set_title('Ground-truth y')
-            ax[1].set_xticks([])
-            ax[1].set_yticks([])
-
-            plt.tight_layout()
-            plt.show()
-            break
+        plt.tight_layout()
 
     def train(self, epochs, learning_rate=8e-4):
         """Train the model."""
@@ -201,7 +191,7 @@ class Trainer():
 
     def plot(self, idx_sample=0):
         """Plot results"""
-        fig = plt.figure(figsize=(8, 4))
+        fig = plt.figure(figsize=(8, 5))
         for index, resolution in enumerate([(32, 64), (64, 128)]):
             inputs = self.input_function_test[resolution]
             outputs = self.output_function_test[resolution]
@@ -220,13 +210,13 @@ class Trainer():
 
             ax = fig.add_subplot(2, 3, index*3 + 1)
             ax.imshow(inputs[0, :, :, 0])
-            ax.set_title(f'Input x {resolution}')
+            ax.set_title(f'Input {resolution}')
             plt.xticks([], [])
             plt.yticks([], [])
 
             ax = fig.add_subplot(2, 3, index*3 + 2)
             ax.imshow(outputs[0, :, :, 0])
-            ax.set_title('Ground-truth y')
+            ax.set_title('Ground-truth')
             plt.xticks([], [])
             plt.yticks([], [])
 
@@ -236,9 +226,7 @@ class Trainer():
             plt.xticks([], [])
             plt.yticks([], [])
 
-            fig.suptitle('Inputs, ground-truth output and prediction.', y=0.98)
             plt.tight_layout()
-            fig.show()
 
     def plot_loss_function(self, hist_train, hist_test):
         """Function to plot the loss function"""

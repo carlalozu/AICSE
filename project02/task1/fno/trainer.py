@@ -108,7 +108,8 @@ class Trainer():
 
         y_axis = x_data[:len(y_data[:, 1]), 2] + \
             x_data[self.window_length_in, 2]
-        plt.figure()
+
+        plt.figure(dpi=100, figsize=(7, 4), frameon=False)
         plt.plot(x_data[:, 2], x_data[:, 0],
                  label="inputs for fluid phase")
 
@@ -127,7 +128,7 @@ class Trainer():
         plt.title('Fluid phase, x=0')
         plt.legend()
 
-    def train(self, epochs, learning_rate, step_size, gamma):
+    def train(self, epochs, learning_rate, step_size, gamma, freq_print=1):
         """Train the model."""
 
         optimizer = Adam(self.fno.parameters(),
@@ -136,7 +137,7 @@ class Trainer():
             optimizer, step_size=step_size, gamma=gamma)
 
         loss = LpLoss(size_average=False)
-        freq_print = 1
+
         hist_train, hist_test = [], []
         for epoch in range(epochs):
             train_mse = 0.0
@@ -183,47 +184,39 @@ class Trainer():
                 data[:, :, i].reshape(-1, 1)).reshape(data[:, :, i].shape))
         return data
 
-    def plot(self, idx_=-1):
+    def plot(self, idx=-1):
         """Plot results."""
         inputs = self.input_function_test
         outputs = self.output_function_test
 
-        if idx_ == -1:
-            # plot all samples
-            range_idx = range(inputs.shape[0])
-        else:
-            # plot a specific sample
-            range_idx = [idx_]
+        input_batch = deepcopy(inputs[idx, ...].unsqueeze(0))
+        output_batch = deepcopy(outputs[idx, ...].unsqueeze(0))
 
-        for idx in range_idx:
-            input_batch = deepcopy(inputs[idx, ...].unsqueeze(0))
-            output_batch = deepcopy(outputs[idx, ...].unsqueeze(0))
+        plt.figure(dpi=100, figsize=(7, 4), frameon=False)
+        output_pred_batch = self.fno(input_batch).detach().numpy()
 
-            plt.figure()
-            output_pred_batch = self.fno(input_batch).detach().numpy()
+        #  inverse transform the data
+        scalers = [self.scaler_tf0, self.scaler_ts0, self.scaler_time]
+        input_batch = self._inverse_transform_data(input_batch, scalers)
+        scalers.pop()
+        output_batch = self._inverse_transform_data(output_batch, scalers)
+        output_pred_batch = self._inverse_transform_data(
+            output_pred_batch, scalers)
 
-            #  inverse transform the data
-            scalers = [self.scaler_tf0, self.scaler_ts0, self.scaler_time]
-            input_batch = self._inverse_transform_data(input_batch, scalers)
-            scalers.pop()
-            output_batch = self._inverse_transform_data(output_batch, scalers)
-            output_pred_batch = self._inverse_transform_data(
-                output_pred_batch, scalers)
+        x_ax_output = input_batch[0, -1, 2] + \
+            input_batch[0, :, 2]-input_batch[0, 0, 2]
 
-            x_ax_output = input_batch[0, -1, 2] + \
-                input_batch[0, :, 2]-input_batch[0, 0, 2]
+        plt.plot(input_batch[0, :, 2], input_batch[0, :, 0])
+        plt.plot(x_ax_output, output_batch[0, :, 0])
+        plt.plot(x_ax_output, output_pred_batch[0, :, 0],
+                    label='Predicted ft', linestyle='--')
 
-            plt.plot(input_batch[0, :, 2], input_batch[0, :, 0])
-            plt.plot(x_ax_output, output_batch[0, :, 0])
-            plt.plot(x_ax_output, output_pred_batch[0, :, 0],
-                        label='Predicted ft', linestyle='--')
-
-            plt.plot(input_batch[0, :, 2], input_batch[0, :, 1])
-            plt.plot(x_ax_output, output_batch[0, :, 1])
-            plt.plot(x_ax_output, output_pred_batch[0, :, 1],
-                        label='Predicted fs', linestyle='--')
-
-            plt.legend()
+        plt.plot(input_batch[0, :, 2], input_batch[0, :, 1])
+        plt.plot(x_ax_output, output_batch[0, :, 1])
+        plt.plot(x_ax_output, output_pred_batch[0, :, 1],
+                    label='Predicted fs', linestyle='--')
+        plt.grid(True, which="both", ls=":")
+        plt.legend()
 
 
     def plot_loss_function(self, hist_train, hist_test):
