@@ -134,10 +134,9 @@ class Trainer():
         plt.xlabel('Time')
         plt.legend(loc='lower left')
         plt.tight_layout()
-        plt.savefig(f'plot_complete.pdf')
+        plt.savefig('plot_complete.pdf')
         plt.show()
 
-        plt.figure(dpi=100, figsize=(7, 4), frameon=False)
 
     def train(self, epochs, learning_rate, step_size, gamma, freq_print=1):
         """Train the model."""
@@ -147,7 +146,8 @@ class Trainer():
         scheduler = torch.optim.lr_scheduler.StepLR(
             optimizer, step_size=step_size, gamma=gamma)
 
-        loss = LpLoss(d=2, size_average=False)
+        loss = LpLoss(d=2, p=2, size_average=False)
+        loss_test = LpLoss(d=2, p=2, size_average=False)
 
         # Training loop
         hist_train, hist_test = [], []
@@ -169,28 +169,20 @@ class Trainer():
             # Test the model
             with torch.no_grad():
                 self.fno.eval()
-                test_relative_l2 = 0.0
+                test_loss = 0.0
                 for input_batch, output_batch in self.testing_set:
                     output_pred_batch = self.fno(input_batch).squeeze(2)
-                    loss_f = self.relative_lp_norm(
-                        output_pred_batch, output_batch)
-                    test_relative_l2 += loss_f.item()
-                test_relative_l2 /= len(self.testing_set)
-                hist_test.append(test_relative_l2)
+                    loss_t = loss_test(output_pred_batch, output_batch)
+                    test_loss += loss_t.item()
+                test_loss /= len(self.testing_set)
+                hist_test.append(test_loss)
 
             # Print results
             if epoch % freq_print == 0:
                 print("######### Epoch:", epoch, " ######### Train Loss:",
-                      train_loss, " ######### Relative L2 Test Norm:", test_relative_l2)
+                      train_loss, " ######### Relative L2 Test Norm:", test_loss)
 
         return hist_train, hist_test
-
-    @staticmethod
-    def relative_lp_norm(y, y_, p=2):
-        """Relative Lp norm."""
-        err = (torch.mean(abs(y.reshape(-1, ) - y_.detach(
-        ).reshape(-1, )) ** p) / torch.mean(abs(y.detach()) ** p)) ** (1 / p) * 100
-        return err
 
     @staticmethod
     def _inverse_transform_data(data, scalers):
@@ -293,7 +285,7 @@ class Trainer():
 
         return input_batch, output_pred_batch
 
-    def plot_test(self, idx=0):
+    def plot_test(self):
         """Plot results."""
         # Retrieve data
         inputs = self.input_function_test
@@ -338,5 +330,5 @@ class Trainer():
 
         plt.xlabel('Time')
         plt.tight_layout()
-        plt.savefig(f'plot_predictions.pdf')
+        plt.savefig('plot_predictions.pdf')
         plt.show()

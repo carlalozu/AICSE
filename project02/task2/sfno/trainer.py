@@ -21,13 +21,17 @@ class Trainer():
 
     def __init__(self, n_train, model):
         self.n_train = n_train
+        self.n_test = 50
 
         self.scalers_inputs = [
             StandardScaler(), StandardScaler(), StandardScaler()]
         self.scalers_outputs = [
             StandardScaler(), StandardScaler(), StandardScaler()]
 
+        self.train_resolution = (32, 64)
+        self.test_resolutions = [(32, 64), (64, 128)]
         self.training_set, self.testing_set = self.assemble_datasets()
+
 
         self.model = model.to(device)
 
@@ -73,9 +77,9 @@ class Trainer():
         training_set, testing_set = load_spherical_swe(
             n_train=self.n_train,
             batch_size=None,
-            train_resolution=(32, 64),
-            test_resolutions=[(32, 64), (64, 128)],
-            n_tests=[50, 50],
+            train_resolution=self.train_resolution,
+            test_resolutions=self.test_resolutions,
+            n_tests=[self.n_test, self.n_test],
             test_batch_sizes=[None, None],
         )
 
@@ -99,7 +103,7 @@ class Trainer():
         self.input_function_test = {}
         self.output_function_test = {}
 
-        for resolution in [(32, 64), (64, 128)]:
+        for resolution in self.test_resolutions:
             data_in, data_out = self._arrange_data(
                 testing_set[resolution].dataset)
 
@@ -146,6 +150,7 @@ class Trainer():
         scheduler = CosineAnnealingLR(optimizer, T_max=30)
 
         loss = LpLoss(d=2, p=2, reduction=True)
+        loss_test = LpLoss(d=2, p=2, reduction=True)
         freq_print = 1
         hist = []
         hist_train = []
@@ -164,34 +169,28 @@ class Trainer():
 
             with torch.no_grad():
                 self.model.eval()
-                test_relative_l2 = 0.0
-                for resolution in [(32, 64), (64, 128)]:
-                    test_relative_ = 0.0
+                test_loss = 0.0
+                for resolution in self.test_resolutions:
+                    test_loss_ = 0.0
                     for input_batch, output_batch in self.testing_set[resolution]:
                         output_pred_batch = self.model(input_batch).squeeze(2)
-                        loss_f = self.relative_lp_norm(output_pred_batch, output_batch)
-                        test_relative_ += loss_f.item()
-                    test_relative_ /= len(self.testing_set)
-                    test_relative_l2 += test_relative_
-                test_relative_l2 /= 2
-                hist_train.append(test_relative_l2)
+                        loss_t = loss_test(
+                            output_pred_batch, output_batch)
+                        test_loss_ += loss_t.item()
+                    test_loss_ /= len(self.testing_set)
+                    test_loss += test_loss_
+                test_loss /= len(self.test_resolutions)
+                hist_train.append(test_loss)
 
             if epoch % freq_print == 0:
                 print("######### Epoch:", epoch, " ######### Train Loss:",
-                      train_loss, " ######### Relative L2 Test Norm:", test_relative_l2)
+                      train_loss, " ######### Relative L2 Test Norm:", test_loss)
         return hist, hist_train
-
-    @staticmethod
-    def relative_lp_norm(y, y_, p=2):
-        """Relative Lp error."""
-        err = (torch.mean(abs(y.detach().reshape(-1, ) - y_.detach(
-        ).reshape(-1, )) ** p) / torch.mean(abs(y.detach()) ** p)) ** (1 / p) * 100
-        return err
 
     def plot(self, idx_sample=0):
         """Plot results"""
-        fig = plt.figure(figsize=(8, 5))
-        for index, resolution in enumerate([(32, 64), (64, 128)]):
+        fig = plt.figure(figsize=(9, 5))
+        for index, resolution in enumerate(self.test_resolutions):
             inputs = self.input_function_test[resolution]
             outputs = self.output_function_test[resolution]
 
@@ -226,6 +225,7 @@ class Trainer():
             plt.yticks([], [])
 
             plt.tight_layout()
+            plt.savefig(f"results_{idx_sample}_{self.model}.png")
 
     def plot_loss_function(self, hist_train, hist_test):
         """Function to plot the loss function"""
@@ -234,12 +234,13 @@ class Trainer():
 
         plt.figure(dpi=100, figsize=(7, 4), frameon=False)
         plt.grid(True, which="both", ls=":")
-        plt.plot(np.arange(1, len(hist_train)+1), hist_train/hist_train[0], label = "Train")
-        plt.plot(np.arange(1, len(hist_test)+1), hist_test/hist_test[0], label = "Test")
-        plt.xscale("log")
+        plt.plot(np.arange(1, len(hist_train)+1), hist_train, label = "Train")
+        plt.plot(np.arange(1, len(hist_test)+1), hist_test, label = "Validation")
         plt.yscale("log")
         plt.xlabel("Iteration")
+        plt.xticks(np.arange(0, len(hist_train) + 1, 2))
         plt.ylabel("Log loss")
         plt.legend()
         plt.tight_layout()
+        plt.savefig(f"loss_function_{self.model}.pdf")
         plt.show()
