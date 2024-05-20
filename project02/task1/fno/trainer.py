@@ -97,7 +97,7 @@ class Trainer():
 
         return training_set, testing_set
 
-    def plot_inputs(self, prediction=False):
+    def plot_prediction(self):
         """Plot the input and output functions that will feed the model."""
 
         x_data, y_data = self.load_data()
@@ -110,33 +110,34 @@ class Trainer():
         scalers.pop()
         y_data = self._inverse_transform_data(y_data, scalers).squeeze(0)
 
-        # Axis for the output
-        y_axis = x_data[:len(y_data[:, 1]), 2] + \
-            x_data[self.window_length_in, 2]
-
-        if prediction:
-            input_batch, output_pred_batch = self.predict_future()
-            x_data = torch.cat([x_data, input_batch], dim=0)
-            x_data = torch.cat([x_data, output_pred_batch], dim=0)
+        input_batch, output_pred_batch = self.predict_future()
+        x_data = torch.cat([x_data, input_batch], dim=0)
+        x_data = torch.cat([x_data, output_pred_batch], dim=0)
 
         # Plots
+        _, ax = plt.subplots(2, 1, sharex=True, figsize=(7, 4), frameon=False)
+        ax[0].plot(x_data[:, 2], x_data[:, 0], linewidth=2)
+        ax[0].plot(output_pred_batch[:, 2],
+                   output_pred_batch[:, 0], linewidth=2)
+        ax[0].set_ylabel(r'$T_f(x=0, t)$')
+        ax[0].grid(True, which="both", ls=":")
+        ax[0].set_ylim([300, 900])
+
+        ax[1].plot(x_data[:, 2], x_data[:, 1], linewidth=2,
+                   label='Measurements')
+        ax[1].plot(output_pred_batch[:, 2], output_pred_batch[:, 1], linewidth=2,
+                   label='Prediction')
+        ax[1].set_ylabel(r'$T_s(x=0, t)$')
+        ax[1].grid(True, which="both", ls=":")
+        ax[1].set_ylim([300, 900])
+
+        plt.xlabel('Time')
+        plt.legend(loc='lower left')
+        plt.tight_layout()
+        plt.savefig(f'plot_complete.pdf')
+        plt.show()
+
         plt.figure(dpi=100, figsize=(7, 4), frameon=False)
-        plt.plot(x_data[:, 2], x_data[:, 0],
-                 label="Inputs for fluid phase")
-        plt.plot(x_data[:, 2], x_data[:, 1],
-                 label="Inputs for solid phase", linestyle='--')
-
-        if not prediction:
-            plt.plot(y_axis, y_data[:, 0],
-                     label="Outputs for fluid phase")
-            plt.plot(y_axis, y_data[:, 1],
-                     label="Outputs for solid phase", linestyle='--')
-
-        plt.grid(True, which="both", ls=":")
-        plt.xlabel('Time increments')
-        plt.ylabel('Temperature T(0,t)')
-        plt.title('Fluid phase, x=0')
-        plt.legend()
 
     def train(self, epochs, learning_rate, step_size, gamma, freq_print=1):
         """Train the model."""
@@ -146,7 +147,7 @@ class Trainer():
         scheduler = torch.optim.lr_scheduler.StepLR(
             optimizer, step_size=step_size, gamma=gamma)
 
-        loss = LpLoss(size_average=False)
+        loss = LpLoss(d=2, size_average=False)
 
         # Training loop
         hist_train, hist_test = [], []
@@ -199,7 +200,7 @@ class Trainer():
                 data[:, :, i].reshape(-1, 1)).reshape(data[:, :, i].shape))
         return data
 
-    def plot(self, idx=-1):
+    def plot_window(self, idx=0):
         """Plot results."""
         # Retrieve data
         inputs = self.input_function_test
@@ -223,18 +224,32 @@ class Trainer():
             input_batch[0, :, 2]-input_batch[0, 0, 2]
 
         # Plots
-        plt.figure(dpi=100, figsize=(7, 4), frameon=False)
-        plt.plot(input_batch[0, :, 2], input_batch[0, :, 0])
-        plt.plot(x_ax_output, output_batch[0, :, 0])
-        plt.plot(x_ax_output, output_pred_batch[0, :, 0],
-                 label='Predicted ft', linestyle='--')
+        _, ax = plt.subplots(2, 1, sharex=True, figsize=(7, 4), frameon=False)
+        ax[0].plot(input_batch[0, :, 2], input_batch[0, :, 0],
+                   label='Input', linewidth=2)
+        ax[0].plot(x_ax_output, output_batch[0, :, 0],
+                   label='Ground truth', linewidth=2)
+        ax[0].plot(x_ax_output, output_pred_batch[0, :, 0],
+                   label='Predicted', linestyle='--', linewidth=2)
+        ax[0].set_ylabel(r'$T_f(x=0, t)$')
+        ax[0].grid(True, which="both", ls=":")
+        ax[0].set_ylim([300, 900])
 
-        plt.plot(input_batch[0, :, 2], input_batch[0, :, 1])
-        plt.plot(x_ax_output, output_batch[0, :, 1])
-        plt.plot(x_ax_output, output_pred_batch[0, :, 1],
-                 label='Predicted fs', linestyle='--')
-        plt.grid(True, which="both", ls=":")
-        plt.legend()
+        ax[1].plot(input_batch[0, :, 2], input_batch[0, :, 1],
+                   label='Input', linewidth=2)
+        ax[1].plot(x_ax_output, output_batch[0, :, 1],
+                   label='Ground truth', linewidth=2)
+        ax[1].plot(x_ax_output, output_pred_batch[0, :, 1],
+                   label='Predicted', linestyle='--', linewidth=2)
+        ax[1].set_ylabel(r'$T_s(x=0, t)$')
+        ax[1].grid(True, which="both", ls=":")
+        ax[1].set_ylim([300, 900])
+
+        plt.xlabel('Time')
+        plt.legend(loc='lower left')
+        plt.tight_layout()
+        plt.savefig(f'plot_window_{idx}.pdf')
+        plt.show()
 
     def plot_loss_function(self, hist_train, hist_test):
         """Plot the loss function normalized in log scale."""
@@ -244,15 +259,16 @@ class Trainer():
         plt.figure(dpi=100, figsize=(7, 4), frameon=False)
         plt.grid(True, which="both", ls=":")
         plt.plot(np.arange(1, len(hist_train)+1),
-                 hist_train/hist_train[0], label="Train")
+                 hist_train, label="Train", linewidth=2)
         plt.plot(np.arange(1, len(hist_test)+1),
-                 hist_test/hist_test[0], label="Test")
+                 hist_test, label="Validation", linewidth=2)
         plt.xscale("log")
         plt.yscale("log")
         plt.xlabel("Iteration")
         plt.ylabel("Log loss")
         plt.legend()
         plt.tight_layout()
+        plt.savefig('loss_function.pdf')
         plt.show()
 
     def predict_future(self):
@@ -276,3 +292,51 @@ class Trainer():
             [output_pred_batch, pred_axis.reshape(-1, 1)], axis=1)
 
         return input_batch, output_pred_batch
+
+    def plot_test(self, idx=0):
+        """Plot results."""
+        # Retrieve data
+        inputs = self.input_function_test
+        outputs = self.output_function_test
+        _, ax = plt.subplots(2, 1, sharex=True, figsize=(7, 4), frameon=False)
+
+        for idx in range(len(inputs)):
+            if idx//7 == 0:
+                continue
+
+            input_batch = deepcopy(inputs[idx, ...].unsqueeze(0))
+            output_batch = deepcopy(outputs[idx, ...].unsqueeze(0))
+
+            # Predict
+            output_pred_batch = self.fno(input_batch).detach().numpy()
+
+            #  Inverse transform the data
+            scalers = [self.scaler_tf0, self.scaler_ts0, self.scaler_time]
+            input_batch = self._inverse_transform_data(input_batch, scalers)
+            scalers.pop()
+            output_batch = self._inverse_transform_data(output_batch, scalers)
+            output_pred_batch = self._inverse_transform_data(
+                output_pred_batch, scalers)
+
+            x_ax_output = input_batch[0, -1, 2] + \
+                input_batch[0, :, 2]-input_batch[0, 0, 2]
+
+            # Plots
+            ax[0].plot(x_ax_output, output_batch[0, :, 0], linewidth=2)
+            ax[0].plot(x_ax_output, output_pred_batch[0, :, 0],
+                       linestyle='--', linewidth=2)
+            ax[0].set_ylabel(r'$T_f(x=0, t)$')
+            ax[0].set_ylim([500, 900])
+            ax[0].grid(True, which="both", ls=":")
+
+            ax[1].plot(x_ax_output, output_batch[0, :, 1], linewidth=2)
+            ax[1].plot(x_ax_output, output_pred_batch[0, :, 1],
+                       linestyle='--', linewidth=2)
+            ax[1].set_ylabel(r'$T_s(x=0, t)$')
+            ax[1].set_ylim([500, 900])
+            ax[1].grid(True, which="both", ls=":")
+
+        plt.xlabel('Time')
+        plt.tight_layout()
+        plt.savefig(f'plot_predictions.pdf')
+        plt.show()
