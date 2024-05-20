@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from copy import deepcopy
 
 from torch.optim import Adam
 from torch.utils.data import DataLoader, TensorDataset
@@ -96,9 +97,17 @@ class Trainer():
         """Plot the input and output functions."""
 
         x_data, y_data = self.load_data()
+        x_data = x_data.reshape(1, -1, 3)
+        y_data = y_data.reshape(1, -1, 2)
+
+        #  inverse transform the data
+        scalers = [self.scaler_tf0, self.scaler_ts0, self.scaler_time]
+        x_data = self._inverse_transform_data(x_data, scalers).squeeze(0)
+        scalers.pop()
+        y_data = self._inverse_transform_data(y_data, scalers).squeeze(0)
+
         y_axis = x_data[:len(y_data[:, 1]), 2] + \
             x_data[self.window_length_in, 2]
-
         plt.figure()
         plt.plot(x_data[:, 2], x_data[:, 0],
                  label="inputs for fluid phase")
@@ -148,7 +157,8 @@ class Trainer():
                 test_relative_l2 = 0.0
                 for input_batch, output_batch in self.testing_set:
                     output_pred_batch = self.fno(input_batch).squeeze(2)
-                    loss_f = self.relative_lp_norm(output_pred_batch, output_batch)
+                    loss_f = self.relative_lp_norm(
+                        output_pred_batch, output_batch)
                     test_relative_l2 += loss_f.item()
                 test_relative_l2 /= len(self.testing_set)
                 hist_test.append(test_relative_l2)
@@ -166,44 +176,67 @@ class Trainer():
         ).reshape(-1, )) ** p) / torch.mean(abs(y.detach()) ** p)) ** (1 / p) * 100
         return err
 
+    @staticmethod
+    def _inverse_transform_data(data, scalers):
+        for i, scaler in enumerate(scalers):
+            data[:, :, i] = torch.tensor(scaler.inverse_transform(
+                data[:, :, i].reshape(-1, 1)).reshape(data[:, :, i].shape))
+        return data
+
     def plot(self, idx_=-1):
         """Plot results."""
-        for input_batch, output_batch in self.testing_set:
+        inputs = self.input_function_test
+        outputs = self.output_function_test
 
-            if idx_ == -1:
-                range_idx = range(input_batch.shape[0])
-            else:
-                range_idx = [idx_]
+        if idx_ == -1:
+            # plot all samples
+            range_idx = range(inputs.shape[0])
+        else:
+            # plot a specific sample
+            range_idx = [idx_]
 
-            for idx in range_idx:
-                plt.figure()
-                output_pred_batch = self.fno(input_batch).detach().numpy()
+        for idx in range_idx:
+            input_batch = deepcopy(inputs[idx, ...].unsqueeze(0))
+            output_batch = deepcopy(outputs[idx, ...].unsqueeze(0))
 
-                x_ax_output = input_batch[idx, -1, 2] + \
-                    input_batch[idx, :, 2]-input_batch[idx, 0, 2]
+            plt.figure()
+            output_pred_batch = self.fno(input_batch).detach().numpy()
 
-                plt.plot(input_batch[idx, :, 2], input_batch[idx, :, 0])
-                plt.plot(x_ax_output, output_batch[idx, :, 0])
-                plt.plot(x_ax_output, output_pred_batch[idx, :, 0],
-                         label='predicted ft', linestyle='--')
+            #  inverse transform the data
+            scalers = [self.scaler_tf0, self.scaler_ts0, self.scaler_time]
+            input_batch = self._inverse_transform_data(input_batch, scalers)
+            scalers.pop()
+            output_batch = self._inverse_transform_data(output_batch, scalers)
+            output_pred_batch = self._inverse_transform_data(
+                output_pred_batch, scalers)
 
-                plt.plot(input_batch[idx, :, 2], input_batch[idx, :, 1])
-                plt.plot(x_ax_output, output_batch[idx, :, 1])
-                plt.plot(x_ax_output, output_pred_batch[idx, :, 1],
-                         label='predicted fs', linestyle='--')
+            x_ax_output = input_batch[0, -1, 2] + \
+                input_batch[0, :, 2]-input_batch[0, 0, 2]
 
-                plt.legend()
+            plt.plot(input_batch[0, :, 2], input_batch[0, :, 0])
+            plt.plot(x_ax_output, output_batch[0, :, 0])
+            plt.plot(x_ax_output, output_pred_batch[0, :, 0],
+                        label='Predicted ft', linestyle='--')
+
+            plt.plot(input_batch[0, :, 2], input_batch[0, :, 1])
+            plt.plot(x_ax_output, output_batch[0, :, 1])
+            plt.plot(x_ax_output, output_pred_batch[0, :, 1],
+                        label='Predicted fs', linestyle='--')
+
+            plt.legend()
 
 
     def plot_loss_function(self, hist_train, hist_test):
         """Function to plot the loss function"""
-        hist_train = np.array(hist_train)
-        hist_test = np.array(hist_test)
+        hist_train= np.array(hist_train)
+        hist_test= np.array(hist_test)
 
         plt.figure(dpi=100, figsize=(7, 4), frameon=False)
         plt.grid(True, which="both", ls=":")
-        plt.plot(np.arange(1, len(hist_train)+1), hist_train/hist_train[0], label = "Train")
-        plt.plot(np.arange(1, len(hist_test)+1), hist_test/hist_test[0], label = "Test")
+        plt.plot(np.arange(1, len(hist_train)+1),
+                 hist_train/hist_train[0], label="Train")
+        plt.plot(np.arange(1, len(hist_test)+1),
+                 hist_test/hist_test[0], label="Test")
         plt.xscale("log")
         plt.yscale("log")
         plt.xlabel("Iteration")
