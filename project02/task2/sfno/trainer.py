@@ -150,16 +150,16 @@ class Trainer():
         hist = []
         hist_train = []
         for epoch in range(epochs):
-            train_mse = 0.0
+            train_loss = 0.0
             for input_batch, output_batch in self.training_set:
                 optimizer.zero_grad()
                 output_pred_batch = self.model(input_batch).squeeze(2)
                 loss_f = loss(output_pred_batch, output_batch)
                 loss_f.backward()
                 optimizer.step()
-                train_mse += loss_f.item()
-            train_mse /= len(self.training_set)
-            hist.append(train_mse)
+                train_loss += loss_f.item()
+            train_loss /= len(self.training_set)
+            hist.append(train_loss)
             scheduler.step()
 
             with torch.no_grad():
@@ -168,7 +168,6 @@ class Trainer():
                 for resolution in [(32, 64), (64, 128)]:
                     test_relative_ = 0.0
                     for input_batch, output_batch in self.testing_set[resolution]:
-
                         output_pred_batch = self.model(input_batch).squeeze(2)
                         loss_f = self.relative_lp_norm(output_pred_batch, output_batch)
                         test_relative_ += loss_f.item()
@@ -179,7 +178,7 @@ class Trainer():
 
             if epoch % freq_print == 0:
                 print("######### Epoch:", epoch, " ######### Train Loss:",
-                      train_mse, " ######### Relative L2 Test Norm:", test_relative_l2)
+                      train_loss, " ######### Relative L2 Test Norm:", test_relative_l2)
         return hist, hist_train
 
     @staticmethod

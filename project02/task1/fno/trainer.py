@@ -50,7 +50,7 @@ class Trainer():
         data['t'] = self.scaler_time.fit_transform(
             data['t'].values.reshape(-1, 1))
 
-        # Transform data
+        # Store the data in tensors
         x_data = torch.tensor(data[['tf0', 'ts0', 't']].values, dtype=torch.float32)[
             :-self.window_length_out, :]
         y_data = torch.tensor(data[['tf0', 'ts0']].values, dtype=torch.float32)[
@@ -59,31 +59,31 @@ class Trainer():
         return x_data, y_data
 
     def assemble_datasets(self):
-        """Prepare the datasets, without splitting into train and test sets."""
-
+        """Prepare the datasets, split into train and test and create dataloaders."""
         x_data, y_data = self.load_data()
 
+        # Generate windows using the window generator
         window_generator = WindowGenerator(
             x_data, y_data,
             self.window_length_in,
             self.window_length_out,
             shift=1, stride=1
         )
-
         inputs, outputs = zip(*window_generator)
 
+        # Split the data into train and test
         data_train, data_test, targets_train, targets_test = train_test_split(
             torch.stack(list(inputs)),
             torch.stack(list(outputs)),
             test_size=0.2, shuffle=True,
         )
-
         self.input_function_train = data_train
         self.output_function_train = targets_train
 
         self.input_function_test = data_test
         self.output_function_test = targets_test
 
+        # Create batches with dataloaders
         training_set = DataLoader(
             TensorDataset(data_train, targets_train),
             batch_size=self.batch_size, shuffle=False)
@@ -94,33 +94,32 @@ class Trainer():
         return training_set, testing_set
 
     def plot_inputs(self):
-        """Plot the input and output functions."""
+        """Plot the input and output functions that will feed the model."""
 
         x_data, y_data = self.load_data()
         x_data = x_data.reshape(1, -1, 3)
         y_data = y_data.reshape(1, -1, 2)
 
-        #  inverse transform the data
+        #  Inverse transform the data
         scalers = [self.scaler_tf0, self.scaler_ts0, self.scaler_time]
         x_data = self._inverse_transform_data(x_data, scalers).squeeze(0)
         scalers.pop()
         y_data = self._inverse_transform_data(y_data, scalers).squeeze(0)
 
+        # Axis for the output
         y_axis = x_data[:len(y_data[:, 1]), 2] + \
             x_data[self.window_length_in, 2]
 
+        # Plots
         plt.figure(dpi=100, figsize=(7, 4), frameon=False)
         plt.plot(x_data[:, 2], x_data[:, 0],
-                 label="inputs for fluid phase")
-
+                 label="Inputs for fluid phase")
         plt.plot(x_data[:, 2], x_data[:, 1],
-                 label="inputs for solid phase")
-
+                 label="Inputs for solid phase")
         plt.plot(y_axis, y_data[:, 0],
-                 label="outputs for fluid phase", linestyle='--')
-
+                 label="Outputs for fluid phase", linestyle='--')
         plt.plot(y_axis, y_data[:, 1],
-                 label="outputs for solid phase", linestyle='--')
+                 label="Outputs for solid phase", linestyle='--')
 
         plt.grid(True, which="both", ls=":")
         plt.xlabel('Time increments')
@@ -130,7 +129,7 @@ class Trainer():
 
     def train(self, epochs, learning_rate, step_size, gamma, freq_print=1):
         """Train the model."""
-
+        # Set up training parameters
         optimizer = Adam(self.fno.parameters(),
                          lr=learning_rate, weight_decay=1e-5)
         scheduler = torch.optim.lr_scheduler.StepLR(
@@ -138,21 +137,24 @@ class Trainer():
 
         loss = LpLoss(size_average=False)
 
+        # Training loop
         hist_train, hist_test = [], []
         for epoch in range(epochs):
-            train_mse = 0.0
+
+            # Train the model
+            train_loss = 0.0
             for input_batch, output_batch in self.training_set:
                 optimizer.zero_grad()
                 output_pred_batch = self.fno(input_batch).squeeze(2)
                 loss_f = loss(output_pred_batch, output_batch)
                 loss_f.backward()
                 optimizer.step()
-                train_mse += loss_f.item()
-            train_mse /= len(self.training_set)
-            hist_train.append(train_mse)
-
+                train_loss += loss_f.item()
+            train_loss /= len(self.training_set)
+            hist_train.append(train_loss)
             scheduler.step()
 
+            # Test the model
             with torch.no_grad():
                 self.fno.eval()
                 test_relative_l2 = 0.0
@@ -164,9 +166,10 @@ class Trainer():
                 test_relative_l2 /= len(self.testing_set)
                 hist_test.append(test_relative_l2)
 
+            # Print results
             if epoch % freq_print == 0:
                 print("######### Epoch:", epoch, " ######### Train Loss:",
-                      train_mse, " ######### Relative L2 Test Norm:", test_relative_l2)
+                      train_loss, " ######### Relative L2 Test Norm:", test_relative_l2)
 
         return hist_train, hist_test
 
@@ -179,6 +182,7 @@ class Trainer():
 
     @staticmethod
     def _inverse_transform_data(data, scalers):
+        """Inverse transform the data per channel."""
         for i, scaler in enumerate(scalers):
             data[:, :, i] = torch.tensor(scaler.inverse_transform(
                 data[:, :, i].reshape(-1, 1)).reshape(data[:, :, i].shape))
@@ -186,16 +190,17 @@ class Trainer():
 
     def plot(self, idx=-1):
         """Plot results."""
+        # Retrieve data
         inputs = self.input_function_test
         outputs = self.output_function_test
 
         input_batch = deepcopy(inputs[idx, ...].unsqueeze(0))
         output_batch = deepcopy(outputs[idx, ...].unsqueeze(0))
 
-        plt.figure(dpi=100, figsize=(7, 4), frameon=False)
+        # Predict
         output_pred_batch = self.fno(input_batch).detach().numpy()
 
-        #  inverse transform the data
+        #  Inverse transform the data
         scalers = [self.scaler_tf0, self.scaler_ts0, self.scaler_time]
         input_batch = self._inverse_transform_data(input_batch, scalers)
         scalers.pop()
@@ -206,23 +211,24 @@ class Trainer():
         x_ax_output = input_batch[0, -1, 2] + \
             input_batch[0, :, 2]-input_batch[0, 0, 2]
 
+        # Plots
+        plt.figure(dpi=100, figsize=(7, 4), frameon=False)
         plt.plot(input_batch[0, :, 2], input_batch[0, :, 0])
         plt.plot(x_ax_output, output_batch[0, :, 0])
         plt.plot(x_ax_output, output_pred_batch[0, :, 0],
-                    label='Predicted ft', linestyle='--')
+                 label='Predicted ft', linestyle='--')
 
         plt.plot(input_batch[0, :, 2], input_batch[0, :, 1])
         plt.plot(x_ax_output, output_batch[0, :, 1])
         plt.plot(x_ax_output, output_pred_batch[0, :, 1],
-                    label='Predicted fs', linestyle='--')
+                 label='Predicted fs', linestyle='--')
         plt.grid(True, which="both", ls=":")
         plt.legend()
 
-
     def plot_loss_function(self, hist_train, hist_test):
-        """Function to plot the loss function"""
-        hist_train= np.array(hist_train)
-        hist_test= np.array(hist_test)
+        """Plot the loss function normalized in log scale."""
+        hist_train = np.array(hist_train)
+        hist_test = np.array(hist_test)
 
         plt.figure(dpi=100, figsize=(7, 4), frameon=False)
         plt.grid(True, which="both", ls=":")
