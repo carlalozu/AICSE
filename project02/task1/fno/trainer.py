@@ -51,10 +51,14 @@ class Trainer():
             data['t'].values.reshape(-1, 1))
 
         # Store the data in tensors
-        x_data = torch.tensor(data[['tf0', 'ts0', 't']].values, dtype=torch.float32)[
-            :-self.window_length_out, :]
+        x_data_ = torch.tensor(
+            data[['tf0', 'ts0', 't']].values, dtype=torch.float32)
+
+        x_data = x_data_[:-self.window_length_out, :]
         y_data = torch.tensor(data[['tf0', 'ts0']].values, dtype=torch.float32)[
             self.window_length_in:, :]
+
+        self.input_function_predict = x_data_[-self.window_length_out:, :]
 
         return x_data, y_data
 
@@ -93,7 +97,7 @@ class Trainer():
 
         return training_set, testing_set
 
-    def plot_inputs(self):
+    def plot_inputs(self, prediction=False):
         """Plot the input and output functions that will feed the model."""
 
         x_data, y_data = self.load_data()
@@ -110,16 +114,23 @@ class Trainer():
         y_axis = x_data[:len(y_data[:, 1]), 2] + \
             x_data[self.window_length_in, 2]
 
+        if prediction:
+            input_batch, output_pred_batch = self.predict_future()
+            x_data = torch.cat([x_data, input_batch], dim=0)
+            x_data = torch.cat([x_data, output_pred_batch], dim=0)
+
         # Plots
         plt.figure(dpi=100, figsize=(7, 4), frameon=False)
         plt.plot(x_data[:, 2], x_data[:, 0],
                  label="Inputs for fluid phase")
         plt.plot(x_data[:, 2], x_data[:, 1],
-                 label="Inputs for solid phase")
-        plt.plot(y_axis, y_data[:, 0],
-                 label="Outputs for fluid phase", linestyle='--')
-        plt.plot(y_axis, y_data[:, 1],
-                 label="Outputs for solid phase", linestyle='--')
+                 label="Inputs for solid phase", linestyle='--')
+
+        if not prediction:
+            plt.plot(y_axis, y_data[:, 0],
+                     label="Outputs for fluid phase")
+            plt.plot(y_axis, y_data[:, 1],
+                     label="Outputs for solid phase", linestyle='--')
 
         plt.grid(True, which="both", ls=":")
         plt.xlabel('Time increments')
@@ -243,3 +254,25 @@ class Trainer():
         plt.legend()
         plt.tight_layout()
         plt.show()
+
+    def predict_future(self):
+        """Predict the future."""
+        # Make a prediction
+        input_batch = self.input_function_predict.reshape(1, -1, 3)
+        output_pred_batch = self.fno(input_batch).detach()
+
+        # Inverse transform the data
+        scalers = [self.scaler_tf0, self.scaler_ts0, self.scaler_time]
+        input_batch = self._inverse_transform_data(
+            input_batch, scalers).squeeze(0)
+        scalers.pop()
+        output_pred_batch = self._inverse_transform_data(
+            output_pred_batch, scalers).squeeze(0)
+
+        # Add the axis for the prediction
+        pred_axis = input_batch[:, 2] + \
+            - input_batch[0, 2] + input_batch[-1, 2]
+        output_pred_batch = torch.cat(
+            [output_pred_batch, pred_axis.reshape(-1, 1)], axis=1)
+
+        return input_batch, output_pred_batch
