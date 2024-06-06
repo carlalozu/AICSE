@@ -1,33 +1,43 @@
+"""Trainer of the SAGE model."""
+import os
 import time
-
 import torch
+
 from torch import tensor
 from torch.optim import Adam
 from torch.nn import functional as F
 from sage_net import SAGENet
-import os.path as osp
-import os
 
 from torch_geometric.datasets import Planetoid
 
 
-
 class Trainer():
+    """Trainer of the SAGE model."""
 
     def __init__(self, aggr):
-        """Implement and train a basic GNN  to do vertex classification on the Cora dataset."""
+        """Implement and train a basic GNN  to do vertex classification on the
+        Cora dataset."""
         self.dataset = self.assemble_dataset()
+        # Dataset is the graph, model is the neural network
         self.model = SAGENet(self.dataset, aggr)
 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device(
+            'cuda' if torch.cuda.is_available() else 'cpu')
 
     def assemble_dataset(self):
-        path = osp.join(os.getcwd(), 'data', 'Cora')
+        """The Cora dataset consists of 2708 scientific publications classified
+        into one of seven classes. The citation network consists of 5429 links.
+        Each publication in the dataset is described by a 0/1-valued word vector
+        indicating the absence/presence of the corresponding word from the
+        dictionary."""
+
+        path = os.path.join(os.getcwd(), 'data')
 
         return Planetoid(path, 'Cora')
 
     def run(self, runs, epochs, lr, weight_decay,
-        early_stopping):
+            early_stopping):
+        """Run the training process."""
 
         val_losses, accs, durations = [], [], []
         for _ in range(runs):
@@ -35,7 +45,8 @@ class Trainer():
             data = data.to(self.device)
 
             self.model.to(self.device).reset_parameters()
-            optimizer = Adam(self.model.parameters(), lr=lr, weight_decay=weight_decay)
+            optimizer = Adam(self.model.parameters(), lr=lr,
+                             weight_decay=weight_decay)
 
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
@@ -70,16 +81,14 @@ class Trainer():
             accs.append(test_acc)
             durations.append(t_end - t_start)
 
-        loss, acc, duration = tensor(val_losses), tensor(accs), tensor(durations)
+        loss, acc, duration = tensor(
+            val_losses), tensor(accs), tensor(durations)
 
-        print('Val Loss: {:.4f}, Test Accuracy: {:.3f} ± {:.3f}, Duration: {:.3f}'.
-            format(loss.mean().item(),
-                    acc.mean().item(),
-                    acc.std().item(),
-                    duration.mean().item()))
-
+        print(
+            f'Val Loss: {loss.mean().item()}, Test Accuracy: {acc.mean().item()} ± {acc.std().item()}, Duration: {duration.mean().item()}')
 
     def train(self, optimizer, data):
+        """Train the model."""
         self.model.train()
         optimizer.zero_grad()
         out = self.model(data)
@@ -87,8 +96,8 @@ class Trainer():
         loss.backward()
         optimizer.step()
 
-
     def evaluate(self, model, data):
+        """Evaluate the model."""
         model.eval()
 
         with torch.no_grad():
