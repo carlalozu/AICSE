@@ -15,12 +15,8 @@ class SAGENet(torch.nn.Module):
         self.in_channels = dataset.num_features
         self.out_channels = dataset.num_classes
 
-        self.linear = torch.nn.Linear(self.in_channels, self.out_channels)
-
         self.conv1 = SAGEConv(self.in_channels, hidden_channels, aggr)
         self.conv2 = SAGEConv(hidden_channels, self.out_channels, aggr)
-
-        self.activation = torch.nn.Tanh()
         ########################################################################
 
         self.reset_parameters()
