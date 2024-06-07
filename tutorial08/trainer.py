@@ -1,3 +1,4 @@
+"""Trainer module"""
 import random
 import torch
 
@@ -16,6 +17,8 @@ random.seed(0)
 
 
 class Trainer:
+    """Trainer for the Transformer model."""
+
     def __init__(self):
         train_loader, val_loader = self.assemble_datasets()
         self.train_loader = train_loader
@@ -42,6 +45,7 @@ class Trainer:
         self.model.print_size()
 
     def assemble_datasets(self):
+        """Assemble train and validation datasets."""
         training_samples = 256
         batch_size = 16
 
@@ -56,6 +60,8 @@ class Trainer:
         return train_loader, val_loader
 
     def plot_inputs(self):
+        """Plot of the inputs and outputs of a given iteration of the train
+        loader."""
         inputs, outputs = next(iter(self.train_loader))
         inputs = inputs[0, 0].numpy()
         outputs = outputs[0, 0].numpy()
@@ -67,6 +73,7 @@ class Trainer:
         axes[1].set_title("Output")
 
     def train(self):
+        """Train the model."""
         optimizer = AdamW(self.model.parameters(), lr=0.001)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
             optimizer, T_0=200, eta_min=10**-6)
@@ -91,18 +98,22 @@ class Trainer:
             with torch.no_grad():
                 self.model.eval()
                 test_relative_l1 = 0.0
-                for step, (input_batch, output_batch) in enumerate(self.val_loader):
+                for input_batch, output_batch in self.val_loader:
                     output_pred_batch = self.model(input_batch)
                     loss_f = (torch.mean(
-                        (abs(output_pred_batch - output_batch))) / torch.mean(abs(output_batch))) * 100
+                        (abs(output_pred_batch - output_batch))
+                    ) / torch.mean(abs(output_batch))) * 100
                     test_relative_l1 += loss_f.item()
                 test_relative_l1 /= len(self.val_loader)
 
             if epoch % freq_print == 0:
-                print("## Epoch:", epoch, " ## Train Loss:", train_mse,
-                      "## Rel L1 Test Norm:", test_relative_l1, "LR: ", scheduler.get_lr())
+                print("## Epoch:", epoch,
+                      " ## Train Loss:", train_mse,
+                      "## Rel L1 Test Norm:", test_relative_l1,
+                      "LR: ", scheduler.get_lr())
 
     def plot(self):
+        """Plot final results."""
         inputs, outputs = next(iter(self.val_loader))
         pred = self.model(inputs)
         inputs = inputs[0, 0].numpy()

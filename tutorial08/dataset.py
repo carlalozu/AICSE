@@ -13,7 +13,7 @@ class AllenCahnDataset(Dataset):
         assert training_samples <= 256
 
         # Default file:
-        self.file_data = "AllenCahn_NEW.h5"
+        self.file_data = "data/AllenCahn_NEW.h5"
         self.reader = h5py.File(self.file_data, 'r')
 
         # Load normaliation constants:
@@ -39,7 +39,8 @@ class AllenCahnDataset(Dataset):
 
     def __getitem__(self, index):
         inputs = torch.from_numpy(
-            self.reader['Sample_' + str(index + self.start)]["input"][:]).type(torch.float32).reshape(1, 64, 64)
+            self.reader['Sample_' + str(index + self.start)]["input"][:]
+        ).type(torch.float32).reshape(1, 64, 64)
         labels = torch.from_numpy(self.reader['Sample_' + str(
             index + self.start)]["output"][:]).type(torch.float32).reshape(1, 64, 64)
 

@@ -1,4 +1,4 @@
-
+"""Transformer model implementation"""
 import torch
 from torch import nn
 from einops import rearrange
@@ -7,8 +7,8 @@ from einops import rearrange
 class TransformerBlock(nn.Module):
     """Takes sequence of embeddings of dimension dim
     1. Applies depth times:
-       a) Attention block: dim->dim (in the laast dimension)
-       b) MLP block:       dim->dim (in the laast dimension)
+       a) Attention block: dim->dim (in the last dimension)
+       b) MLP block:       dim->dim (in the last dimension)
     2. Applies LayerNorm
     """
 
@@ -23,7 +23,7 @@ class TransformerBlock(nn.Module):
             ]))
 
     def forward(self, x):
-
+        """Forward pass of the transformer block"""
         ###############################
         # TO DO: Implement forward pass
         ###############################
@@ -35,7 +35,7 @@ class AttentionBlock(nn.Module):
     """Takes a sequence of embedding of dimension dim
     1. Applies LayerNorm
     2. Applies linear layer dim -> 3x inner_dim
-                                   NOTE: inner_dim = dim_head x heads
+        NOTE: inner_dim = dim_head x heads
     3. Applies attention
     4. Projects inner -> dim
     """
@@ -61,6 +61,7 @@ class AttentionBlock(nn.Module):
         ) if project_out else nn.Identity()
 
     def forward(self, x):
+        """Forward pass of the attention block"""
         x = self.norm(x)
 
         qkv = self.to_qkv(x).chunk(3, dim=-1)
@@ -90,11 +91,11 @@ class FeedForward(nn.Module):
     def __init__(self, dim, hidden_dim, dropout=0.):
         super().__init__()
         self.net = nn.Sequential(
-
             #############################################
             # TO DO: Implement a sequence of 6 operations
             #############################################
         )
 
     def forward(self, x):
+        """Forward pass of the feed forward block"""
         return self.net(x)
