@@ -25,9 +25,11 @@ class TransformerBlock(nn.Module):
     def forward(self, x):
         """Forward pass of the transformer block"""
         ###############################
-        # TO DO: Implement forward pass
+        # Implement forward pass
+        for attn, ff in self.layers:
+            x = attn(x) + x
+            x = ff(x) + x
         ###############################
-
         return self.norm(x)
 
 
@@ -92,7 +94,13 @@ class FeedForward(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             #############################################
-            # TO DO: Implement a sequence of 6 operations
+            # Implement sequence of 6 operations
+            nn.LayerNorm(dim),
+            nn.Linear(dim, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, dim),
+            nn.Dropout(dropout)
             #############################################
         )
 

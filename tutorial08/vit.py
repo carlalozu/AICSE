@@ -6,7 +6,8 @@ from einops.layers.torch import Rearrange
 
 
 def pair(t):
-    """Returns a single value of pair of the same value"""
+    """Returns a tuple of the same element if t is not a tuple, otherwise
+    returns t"""
     return t if isinstance(t, tuple) else (t, t)
 
 
@@ -15,7 +16,7 @@ class ViT(nn.Module):
     Finds patch sizes (p_h, p_w) & number of patches (n_h, n_w)
     NOTE: It must hold that h%p_h == 0
 
-    1. Applies to_patch_embedding :
+    1. Applies to_patch_embedding:
         a. (n, c, p_h*p1, p_w*p2) -> (n, n_h*n_w, p_h*p_w*c)
          b. LayerNorm
          c. Linear embedding p_h*p_w*c -> dim
@@ -59,17 +60,19 @@ class ViT(nn.Module):
         self.transformer = TransformerBlock(
             dim, depth, heads, dim_head, mlp_dim)
 
-        self.conv_last = torch.nn.Conv2d(in_channels=channels,
-                                         out_channels=channels,
-                                         kernel_size=3,
-                                         padding=1)
+        self.conv_last = torch.nn.Conv2d(
+            in_channels=channels, out_channels=channels,
+            kernel_size=3, padding=1)
 
     def forward(self, img):
         """Forward pass of the ViT model"""
         ###############################
-        # TO DO: Implement forward pass
+        # Implement forward pass
+        x = self.to_patch_embedding(img)
+        x += self.pos_embedding
+        x = self.transformer(x)
+        x = self.patch_to_image(x)
         ###############################
-
         return x
 
     def print_size(self):
