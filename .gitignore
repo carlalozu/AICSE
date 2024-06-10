@@ -295,5 +295,7 @@ TSWLatexianTemp*
 
 # DS_Store
 **/.DS_Store
-Diego/
 results/
+
+# Data files
+*.npz
