@@ -13,11 +13,12 @@ def sinusoidal_embedding(n, d):
 
     return embedding
 
+
 class MyConv(nn.Module):
     def __init__(
             self, shape, in_c, out_c, kernel_size=3,
             stride=1, padding=1, activation=None, normalize=True):
-        super(MyConv, self).__init__()
+        super().__init__()
         self.ln = nn.LayerNorm(shape)
         self.conv1 = nn.Conv2d(in_c, out_c, kernel_size, stride, padding)
         self.activation = nn.SiLU() if activation is None else activation
@@ -43,9 +44,10 @@ def MyTinyUp(size, in_c):
 
 
 class MyTinyUNet(nn.Module):
-  # Here is a network with 3 down and 3 up with the tiny block
+    """Here is a network with 3 down and 3 up with the tiny block"""
+
     def __init__(self, in_c=1, out_c=1, size=32, n_steps=1000, time_emb_dim=100):
-        super(MyTinyUNet, self).__init__()
+        super().__init__()
 
         # Sinusoidal embedding
         self.time_embed = nn.Embedding(n_steps, time_emb_dim)
@@ -84,7 +86,8 @@ class MyTinyUNet(nn.Module):
         self.b_out = MyTinyBlock(size, 20, 10)
         self.conv_out = nn.Conv2d(10, out_c, 3, 1, 1)
 
-    def forward(self, x, t):  # x is (bs, in_c, size, size) t is (bs)
+    def forward(self, x, t):  
+        # x is (bs, in_c, size, size) t is (bs)
         t = self.time_embed(t)
         n = len(x)
         # (bs, 10, size/2, size/2)

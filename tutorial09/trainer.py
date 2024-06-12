@@ -4,12 +4,14 @@ import torchvision
 from myconv import MyTinyUNet
 from denoiser import DDPM
 from tqdm import tqdm
+from torch import nn
 
 
 class Trainer():
+    """Trainer for DDPM"""
 
     def __init__(self, num_timesteps, verbose=False):
-
+        self.verbose = verbose
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu")
 
@@ -20,7 +22,7 @@ class Trainer():
         self.model = DDPM(self.network, num_timesteps, beta_start=0.0001,
                           beta_end=0.02, device=self.device)
 
-        if verbose:
+        if self.verbose:
             for n, p in self.model.named_parameters():
                 print(n, p.shape)
 
@@ -34,6 +36,7 @@ class Trainer():
         self.model.show_images(images, title=title)
 
     def assemble_datasets(self):
+        """Get and download dataset"""
         root_dir = './data/'
         transform01 = torchvision.transforms.Compose([
             torchvision.transforms.Resize(32),
@@ -50,19 +53,24 @@ class Trainer():
         """Training loop for DDPM"""
         optimizer = torch.optim.Adam(
             self.network.parameters(), lr=learning_rate)
+        l = nn.L1Loss()
 
         global_step = 0
         losses = []
-
         for epoch in range(num_epochs):
+            train_mse = 0.0
             self.model.train()
             progress_bar = tqdm(total=len(self.dataloader))
             progress_bar.set_description(f"Epoch {epoch}")
-            for _, batch in enumerate(self.dataloader):
-                batch = batch[0].to(self.device)
-                #
-                # your code here
-                #
+            for input_batch, output_batch in self.dataloader:
+                ########################################
+                optimizer.zero_grad()
+                output_pred_batch = self.model(input_batch)
+                loss = l(output_pred_batch, output_batch) / \
+                    l(output_batch, torch.zeros_like(output_batch))
+                loss.backward()
+                train_mse += loss.item()
+                ########################################
 
                 progress_bar.update(1)
                 logs = {"loss": loss.detach().item(), "step": global_step}
@@ -70,4 +78,16 @@ class Trainer():
                 progress_bar.set_postfix(**logs)
                 global_step += 1
 
+            train_mse /= len(self.dataloader)
+
+            if self.verbose:
+                print("###",
+                      "Epoch: ", epoch,
+                      "Loss:", losses[-1],
+                      "Train Loss:", train_mse.end,
+                      "Global Step:", global_step,
+                      "###")
+
             progress_bar.close()
+
+        return losses

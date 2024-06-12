@@ -1,43 +1,71 @@
+"""Denoiser module"""
 import torch
-import torch.nn as nn
+from torch import nn
 from tqdm.notebook import tqdm
 import matplotlib.pyplot as plt
+from myconv import MyTinyUNet
 
 
 class DDPM(nn.Module):
-    def __init__(
-            self, network, num_timesteps, beta_start=0.0001, beta_end=0.02, device=None) -> None:
-        super().__init__()
-        self.num_timesteps = num_timesteps
-        self.betas = torch.linspace(
-            beta_start, beta_end, num_timesteps, dtype=torch.float32).to(device)
+    """Deep Denoising Probabilistic Model"""
 
+    def __init__(
+            self, num_timesteps, beta_start=0.0001, beta_end=0.02) -> None:
+        super().__init__()
+        self.network = MyTinyUNet()
+
+        self.num_timesteps = num_timesteps
+
+        self.betas = torch.linspace(
+            beta_start, beta_end, num_timesteps, dtype=torch.float32)  # schedule for beta
         self.alphas = 1.0 - self.betas
         self.alphas_cumprod = torch.cumprod(self.alphas, axis=0)
-        self.network = network
-        self.device = device
         self.sqrt_alphas_cumprod = self.alphas_cumprod ** 0.5  # used in add_noise
         self.sqrt_one_minus_alphas_cumprod = (
             1 - self.alphas_cumprod) ** 0.5  # used in add_noise and step
 
-    def add_noise(self, x_start, noise, timesteps):
-        # The forward process
+    def add_noise(self, x_start, x_noise, timesteps):
+        """The forward process"""
         # x_start and x_noise (bs, n_c, w, d)
         # timesteps (bs)
-        #
-        # your code here
-        pass
+
+        ########################################
+        mu = 1/self.alphas[timesteps]*(x_start-(1-self.alphas[timesteps]) /
+                                      self.sqrt_one_minus_alphas_cumprod[timesteps]*x_noise)
+        gamma = self.beta[timesteps]*(1-self.alphas_cumprod[timesteps-1]) / \
+            (1-self.alphas_cumprod[timesteps])
+
+        return mu + gamma**0.5*torch.randn_like(x_start)
+        ########################################
 
     def reverse(self, x, t):
-        # The network return the estimation of the noise we added
+        """The network return the estimation of the noise we added"""
         return self.network(x, t)
 
+    def forward(self, x):
+        """The forward process"""
+        # x (bs, n_c, w, d)
+        # t (bs)
+
+        ########################################
+        t = torch.randint(0, self.num_timesteps, (x.shape[0],))
+        x = self.add_noise(x, self.reverse(x, t), t)
+        return x
+        ########################################
+
     def step(self, predicted_noise, timestep, sample):
-        # one step of sampling
+        """One step of sampling"""
         # timestep (1)
-        #
-        # your code here
-        pass
+        # predicted_noise is epsilon_not
+
+        ########################################
+        inner_term = sample - \
+            (1-self.alphas[timestep]) / \
+            self.sqrt_one_minus_alphas_cumprod[timestep]*predicted_noise
+        epsilon = torch.rand_like(sample)
+        add_term = self.beta[timestep]**0.5 * epsilon
+        return inner_term/(self.alphas[timestep]**0.5)+add_term
+        ########################################
 
     def generate_image(self, sample_size=100, channel=1, size=32):
         """Generate the image from the Gaussian noise"""
@@ -50,13 +78,13 @@ class DDPM(nn.Module):
             sample = torch.randn(sample_size, channel, size, size)
 
             for i, t in enumerate(tqdm(timesteps)):
-                #
-                # your code here
-                #
+                ########################################
+                sample_denoised = self.forward(sample)
+                ########################################
 
                 if t == 500:
                     for i in range(sample_size):
-                        frames_mid.append(sample[i].detach().cpu())
+                        frames_mid.append(sample_denoised[i].detach().cpu())
 
             for i in range(sample_size):
                 frames.append(sample[i].detach().cpu())
