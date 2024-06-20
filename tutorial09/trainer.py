@@ -36,7 +36,7 @@ class Trainer():
         self.model.show_images(images, title=title)
 
     def assemble_datasets(self):
-        """Get and download dataset"""
+        """Get and download MNIST dataset"""
         root_dir = './data/'
         transform01 = torchvision.transforms.Compose([
             torchvision.transforms.Resize(32),

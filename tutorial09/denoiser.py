@@ -7,7 +7,7 @@ from myconv import MyTinyUNet
 
 
 class DDPM(nn.Module):
-    """Deep Denoising Probabilistic Model"""
+    """Denoising Diffusion Probabilistic Model"""
 
     def __init__(
             self, num_timesteps, beta_start=0.0001, beta_end=0.02) -> None:
@@ -45,11 +45,10 @@ class DDPM(nn.Module):
     def forward(self, x):
         """The forward process"""
         # x (bs, n_c, w, d)
-        # t (bs)
 
         ########################################
-        t = torch.randint(0, self.num_timesteps, (x.shape[0],))
-        x = self.add_noise(x, self.reverse(x, t), t)
+        for t in range(self.num_timesteps):
+            x = self.add_noise(x, self.reverse(x, t), t)
         return x
         ########################################
 
@@ -76,10 +75,10 @@ class DDPM(nn.Module):
         with torch.no_grad():
             timesteps = list(range(self.num_timesteps))[::-1]
             sample = torch.randn(sample_size, channel, size, size)
-
+            sample_denoised = sample
             for i, t in enumerate(tqdm(timesteps)):
                 ########################################
-                sample_denoised = self.forward(sample)
+                sample_denoised = self.step(sample_denoised, t)
                 ########################################
 
                 if t == 500:
