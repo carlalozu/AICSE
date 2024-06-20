@@ -1,9 +1,10 @@
 """Inverted pendulum solved using JAX autodiff"""
 
-import jax.numpy as jnp
+import torch
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-from matplotlib.ticker import FormatStrFormatter
+# from matplotlib.ticker import FormatStrFormatter
+
 
 class InvertedPendulum:
     """Inverted pendulum class"""
@@ -20,16 +21,16 @@ class InvertedPendulum:
 
         # cart acceleration
         x_dot_dot_num = force - self.m*self.g * \
-            jnp.cos(theta)*jnp.sin(theta) + self.m * \
-            self.l * theta_dot ** 2 * jnp.sin(theta)
-        x_dot_dot_den = self.M + self.m*(1 - jnp.cos(theta) ** 2)
+            torch.cos(theta)*torch.sin(theta) + self.m * \
+            self.l * theta_dot ** 2 * torch.sin(theta)
+        x_dot_dot_den = self.M + self.m*(1 - torch.cos(theta) ** 2)
         x_dot_dot = x_dot_dot_num / x_dot_dot_den
 
         # angular acceleration
-        theta_dot_dot = (self.g * jnp.sin(theta) -
-                         x_dot_dot*jnp.cos(theta)) / self.l
+        theta_dot_dot = (self.g * torch.sin(theta) -
+                         x_dot_dot*torch.cos(theta)) / self.l
 
-        return jnp.array([x_dot, x_dot_dot, theta_dot, theta_dot_dot])
+        return torch.tensor([x_dot, x_dot_dot, theta_dot, theta_dot_dot])
 
     def RK_step(self, state, force, dt):
         """Returns the next state using 4th order Runge Kutta method"""
@@ -41,13 +42,13 @@ class InvertedPendulum:
 
     def rollout(self, initial_state, external_force, dt):
         """Returns the states of a rollout"""
-        states = [initial_state]
-
+        state = initial_state
+        states = []
         for force in external_force:
-            state = self.RK_step(states[-1], force, dt)
+            state = self.RK_step(state, force, dt)
             states.append(state)
 
-        return states
+        return torch.stack(states)
 
     def animate(self, states):
         """Animates the pendulum"""
@@ -69,25 +70,26 @@ class InvertedPendulum:
             y = 0
 
             cart.set_xy((x - 0.1, y - 0.05))
-            pendulum.set_data([x, x + self.l*jnp.sin(theta)],
-                              [y, self.l*jnp.cos(theta)])
+            pendulum.set_data([x, x + self.l*torch.sin(theta)],
+                              [y, self.l*torch.cos(theta)])
             return cart, pendulum
 
-        anim = FuncAnimation(fig, update, frames=len(states), init_func=init, blit=True)
+        anim = FuncAnimation(fig, update, frames=len(
+            states), init_func=init, blit=True)
         return anim
 
     @staticmethod
     def plot(states, force):
-        x_cart = [frame[0] for frame in states]
-        x_dot = [frame[1] for frame in states]
-        theta = [frame[2] for frame in states]
-        theta_dot = [frame[3] for frame in states]
+        x = states[:, 0]
+        x_dot = states[:, 1]
+        theta = states[:, 2]
+        theta_dot = states[:, 3]
 
         plt.figure()
-        fig, axs = plt.subplots(3, 1, figsize=(7, 6)) # frameon=False)
-        
+        fig, axs = plt.subplots(3, 1, figsize=(7, 6))  # frameon=False)
+
         axs[0].set_title('Cart', loc='left')
-        axs[0].plot(x_cart, label=r'$x$')
+        axs[0].plot(x, label=r'$x$')
         axs[0].set_ylabel('Position (m)', color='tab:blue')
         axs[0].tick_params(axis='y', labelcolor='tab:blue')
 
