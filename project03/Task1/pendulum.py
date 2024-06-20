@@ -3,7 +3,7 @@
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-
+from matplotlib.ticker import FormatStrFormatter
 
 class InvertedPendulum:
     """Inverted pendulum class"""
@@ -14,12 +14,9 @@ class InvertedPendulum:
         self.l = length         # m
         self.g = gravity        # m/s^2
 
-    def dynamics(self, state, action):
+    def dynamics(self, state, force):
         """Returns the state derivative"""
         _, x_dot, theta, theta_dot = state
-
-        # force
-        force = jnp.clip(action, -10.0, 10.0)
 
         # cart acceleration
         x_dot_dot_num = force - self.m*self.g * \
@@ -34,30 +31,23 @@ class InvertedPendulum:
 
         return jnp.array([x_dot, x_dot_dot, theta_dot, theta_dot_dot])
 
-    def step(self, state, action, dt):
-        """Returns the next state"""
-        k1 = self.dynamics(state, action)
-        k2 = self.dynamics(state + dt/2*k1, action)
-        k3 = self.dynamics(state + dt/2*k2, action)
-        k4 = self.dynamics(state + dt*k3, action)
+    def RK_step(self, state, force, dt):
+        """Returns the next state using 4th order Runge Kutta method"""
+        k1 = self.dynamics(state, force)
+        k2 = self.dynamics(state + dt/2*k1, force)
+        k3 = self.dynamics(state + dt/2*k2, force)
+        k4 = self.dynamics(state + dt*k3, force)
         return state + dt/6*(k1 + 2*k2 + 2*k3 + k4)
 
-    def cost(self, state, action):
-        """Returns the cost of the state-action pair"""
-        x, _, theta, _ = state
-        return x ** 2 + 0.1*theta ** 2 + 0.001*action ** 2
-    
-    def rollout(self, initial_state, actions, dt):
-        """Returns the states and costs of a rollout"""
+    def rollout(self, initial_state, external_force, dt):
+        """Returns the states of a rollout"""
         states = [initial_state]
-        costs = []
-        for action in actions:
-            state = self.step(states[-1], action, dt)
-            cost = self.cost(states[-1], action)
 
+        for force in external_force:
+            state = self.RK_step(states[-1], force, dt)
             states.append(state)
-            costs.append(cost)
-        return states, costs
+
+        return states
 
     def animate(self, states):
         """Animates the pendulum"""
@@ -90,25 +80,40 @@ class InvertedPendulum:
     def plot(states, force):
         x_cart = [frame[0] for frame in states]
         x_dot = [frame[1] for frame in states]
-        theta = [frame[2]*180/jnp.pi for frame in states]
-        theta_dot = [frame[3]*180/jnp.pi for frame in states]
+        theta = [frame[2] for frame in states]
+        theta_dot = [frame[3] for frame in states]
 
-        fig, axs = plt.subplots(3, 1)
-        axs[0].plot(x_cart, label=r'$x$')
-        axs[0].plot(x_dot, label=r'$\dot{x}$')
-        axs[0].set_ylabel('Position (m)')
-        axs[0].legend()
+        plt.figure()
+        fig, axs = plt.subplots(3, 1, figsize=(7, 6)) # frameon=False)
+        
         axs[0].set_title('Cart', loc='left')
+        axs[0].plot(x_cart, label=r'$x$')
+        axs[0].set_ylabel('Position (m)', color='tab:blue')
+        axs[0].tick_params(axis='y', labelcolor='tab:blue')
 
-        axs[1].plot(theta, label=r'$\theta$')
-        axs[1].plot(theta_dot, label=r'$\dot{\theta}$')
-        axs[1].set_ylabel('Angle (deg)')
-        axs[1].legend()
+        # Second y-axis for velocity
+        ax2 = axs[0].twinx()
+        ax2.plot(x_dot, label=r'$\dot{x}$', color='tab:orange')
+        ax2.set_ylabel('Velocity (m/s)', color='tab:orange')
+        ax2.tick_params(axis='y', labelcolor='tab:orange')
+
         axs[1].set_title('Pendulum', loc='left')
+        axs[1].plot(theta, label=r'$\theta$')
+        axs[1].set_ylabel('Angle (rad)', color='tab:blue')
+        axs[1].tick_params(axis='y', labelcolor='tab:blue')
 
+        # Second y-axis for angular velocity
+        ax3 = axs[1].twinx()
+        ax3.plot(theta_dot, label=r'$\dot{\theta}$', color='tab:orange')
+        ax3.set_ylabel('Angular Velocity (rad/s)', color='tab:orange')
+        ax3.tick_params(axis='y', labelcolor='tab:orange')
+
+        axs[2].set_title('External Force', loc='left')
         axs[2].plot(force)
-        axs[2].legend()
-        axs[2].set_title('External Force')
+        axs[2].set_xlabel('Timesteps')
+        axs[2].set_ylabel('Force (N)', color='tab:blue')
+        axs[2].tick_params(axis='y', labelcolor='tab:blue')
 
         fig.tight_layout()
         plt.show()
+        return fig
