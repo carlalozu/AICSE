@@ -30,7 +30,7 @@ class InvertedPendulum:
         theta_dot_dot = (self.g * torch.sin(theta) -
                          x_dot_dot*torch.cos(theta)) / self.l
 
-        return torch.tensor([x_dot, x_dot_dot, theta_dot, theta_dot_dot])
+        return torch.stack((x_dot, x_dot_dot, theta_dot, theta_dot_dot))
 
     def RK_step(self, state, force, dt):
         """Returns the next state using 4th order Runge Kutta method"""
@@ -42,7 +42,7 @@ class InvertedPendulum:
 
     def rollout(self, initial_state, external_force, dt):
         """Returns the states of a rollout"""
-        state = initial_state
+        state = initial_state.detach().clone()
         states = []
         for force in external_force:
             state = self.RK_step(state, force, dt)
@@ -102,6 +102,7 @@ class InvertedPendulum:
         axs[1].set_title('Pendulum', loc='left')
         axs[1].plot(theta, label=r'$\theta$')
         axs[1].set_ylabel('Angle (rad)', color='tab:blue')
+        axs[1].set_ylim(0, 2*torch.pi)
         axs[1].tick_params(axis='y', labelcolor='tab:blue')
 
         # Second y-axis for angular velocity
