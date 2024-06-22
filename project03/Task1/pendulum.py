@@ -19,6 +19,12 @@ class InvertedPendulum:
         """Returns the state derivative"""
         _, x_dot, theta, theta_dot = state
 
+        if theta < 0:
+            theta = theta + 2*torch.pi
+
+        if theta > 2*torch.pi:
+            theta = theta - 2*torch.pi
+
         # cart acceleration
         x_dot_dot_num = force - self.m*self.g * \
             torch.cos(theta)*torch.sin(theta) + self.m * \
@@ -52,10 +58,7 @@ class InvertedPendulum:
 
     def animate(self, states):
         """Animates the pendulum"""
-        fig, ax = plt.subplots()
-        ax.set_xlim(-2, 2)
-        ax.set_ylim(-2, 2)
-        ax.set_aspect('equal')
+        fig, ax = plt.subplots( figsize=(3, 3))
         ax.grid()
         cart = plt.Rectangle((-0.1, -0.05), 0.2, 0.1, fill=True)
         pendulum, = ax.plot([], [], 'r-', lw=2)
