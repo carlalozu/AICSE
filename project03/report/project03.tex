@@ -1,0 +1,61 @@
+\documentclass[unicode,11pt,a4paper,oneside,numbers=endperiod,openany]{scrartcl}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\input{assignment.sty}
+
+\begin{document}
+
+
+\setassignment
+\setduedate{Wednesday 26 June 2024, 23:59}
+
+\serieheader{AI in the Sciences and Engineering}{Spring Semester 2024}
+            {Student: Carla Judith L\'opez Zurita}
+            {}{Project 3}{}
+\newline
+
+The main objective of the project is to apply the concepts learned in class
+related to Neural Differential Equations and Hybrid Workflows.
+
+
+\section{Inverted pendulum}\label{sec:task1}
+The objective of this task is to control the inverted pendulum problem using a
+Neural Network. The inverted pendulum is a classic problem in control theory,
+where the goal is to balance a pendulum in an upright position by applying an 
+external force $F$ to the cart that holds the pendulum. 
+The system is described by the following differential equation:
+\begin{equation}
+    (M+m) \ddot{x} + m l \ddot{\theta} \cos(\theta) - m l \dot{\theta}^2 \sin(\theta) = F
+    l \ddot{\theta} + g \sin(\theta) = 0
+\end{equation}
+where $\theta$ is the angle of the pendulum with respect to the vertical,
+$g=9.81$ m/s$^2$ is
+the acceleration due to gravity, $l=1.0$ m is the length of the pendulum,
+$m=0.1$ kg is the
+mass of the pendulum, $M=1.0$ kg is the mass of the cart and $F$ is the force
+applied to the cart in Newtons.
+
+\subsection*{Solving the coupled ODE system}
+First, we need to solve the coupled ODE system to simulate the dynamics of the
+inverted pendulum. I used Runge-Kutta 4th order method to solve the system.
+We simulated the system with a sinusoidal force $F(t) = 10 \sin(t)$.
+The results are shown in Figure~\ref{fig:ode}.
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figures/ode.png}
+    \caption{Simulation of the inverted pendulum with a sinusoidal force.}
+    \label{fig:ode}
+\end{figure}
+
+\subsection*{Learning to balance the pendulum}
+
+\section{Task 2}\label{sec:task2}
+
+
+\section{Bonus Task}\label{sec:task3}
+
+
+\bibliographystyle{plain}
+\bibliography{bibliography}
+
+\end{document}
