@@ -21,7 +21,7 @@ class Trainer():
         thetas = states[:, 2]
         theta_dots = states[:, 3]
 
-        # 3/4s of the steps
+        # our goal is to stabilize the pendulum at 3/4s of the steps
         steps = len(thetas)
         tau = int(3*steps/4)
 
@@ -90,13 +90,13 @@ class Trainer():
         hist_train = np.array(hist_train)
 
         fig = plt.figure(dpi=100, figsize=(7, 4))
-        plt.grid(True, which="both", ls=":")
         plt.plot(np.arange(1, len(hist_train)+1),
                  hist_train, label="Train", linewidth=2)
-        plt.xscale("log")
+        plt.grid(True)
+        # plt.xscale("log")
         plt.yscale("log")
-        plt.xlabel("Iteration")
-        plt.ylabel("Log loss")
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss")
         plt.legend()
         plt.tight_layout()
         if save:

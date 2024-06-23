@@ -3,8 +3,8 @@
 import torch
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-# from matplotlib.ticker import FormatStrFormatter
-
+import seaborn as sns
+sns.set()
 
 class InvertedPendulum:
     """Inverted pendulum class"""
@@ -56,22 +56,36 @@ class InvertedPendulum:
 
         return torch.stack(states)
 
-    def animate(self, states):
+    def animate(self, states, dt):
         """Animates the pendulum"""
         fig, ax = plt.subplots( figsize=(3, 3))
-        ax.grid()
+        ax.set_ylim(-1.5, 1.5)
+        ax.set_aspect('equal')
+        ax.grid(True)
+        # Axis on y only on integer values
+        ax.yaxis.set_major_locator(plt.MultipleLocator(1))
+
+        # time
+        time = torch.arange(0, len(states)*dt, dt)
+
         cart = plt.Rectangle((-0.1, -0.05), 0.2, 0.1, fill=True)
-        pendulum, = ax.plot([], [], 'r-', lw=2)
+        pendulum, = ax.plot([], [], '-', lw=1.5, color='tab:orange')
 
         def init():
+            # Initial axis lims
+            ax.set_xlim(-2, 2)
+            ax.set_title('Time: 0s')
+
             ax.add_patch(cart)
             pendulum.set_data([], [])
             return cart, pendulum
 
         def update(frame):
+            ax.set_title(f'Time: {time[frame]:.2f} s')
             x, _, theta, _ = states[frame]
             y = 0
-
+            # Follow the cart
+            ax.set_xlim(x - 1.5, x + 1.5)
             cart.set_xy((x - 0.1, y - 0.05))
             pendulum.set_data([x, x + self.l*torch.sin(theta)],
                               [y, self.l*torch.cos(theta)])
@@ -82,43 +96,56 @@ class InvertedPendulum:
         return anim
 
     @staticmethod
-    def plot(states, force):
+    def plot(states, force, dt):
+        """Plots the relevant variables of the pendulum"""
         x = states[:, 0]
         x_dot = states[:, 1]
         theta = states[:, 2]
         theta_dot = states[:, 3]
 
+        # Steps
+        time = torch.arange(0, len(states)*dt, dt)
+
         plt.figure()
         fig, axs = plt.subplots(3, 1, figsize=(7, 6))  # frameon=False)
 
+        # Cart variables
         axs[0].set_title('Cart', loc='left')
-        axs[0].plot(x, label=r'$x$')
+        axs[0].plot(time, x, label=r'$x$', zorder=3)
         axs[0].set_ylabel('Position (m)', color='tab:blue')
         axs[0].tick_params(axis='y', labelcolor='tab:blue')
 
-        # Second y-axis for velocity
+        # Second y-axis for velocity but delete grid
         ax2 = axs[0].twinx()
-        ax2.plot(x_dot, label=r'$\dot{x}$', color='tab:orange')
+        ax2.plot(time, x_dot, label=r'$\dot{x}$', color='tab:orange', zorder=2)
         ax2.set_ylabel('Velocity (m/s)', color='tab:orange')
         ax2.tick_params(axis='y', labelcolor='tab:orange')
+        ax2.grid(False)
 
+        # Pendulum variables
         axs[1].set_title('Pendulum', loc='left')
-        axs[1].plot(theta, label=r'$\theta$')
+        axs[1].plot(time, theta, label=r'$\theta$')
         axs[1].set_ylabel('Angle (rad)', color='tab:blue')
-        axs[1].set_ylim(0, 2*torch.pi)
+        axs[1].set_ylim(0, 2*torch.pi+0.2)
         axs[1].tick_params(axis='y', labelcolor='tab:blue')
+
+        # vertical line at 3/4 of the plot in axis 
+        axs[1].axvline(x=3*time[-1]/4, color='k', linestyle='--')
 
         # Second y-axis for angular velocity
         ax3 = axs[1].twinx()
-        ax3.plot(theta_dot, label=r'$\dot{\theta}$', color='tab:orange')
+        ax3.plot(time, theta_dot, label=r'$\dot{\theta}$', color='tab:orange')
         ax3.set_ylabel('Angular Velocity (rad/s)', color='tab:orange')
         ax3.tick_params(axis='y', labelcolor='tab:orange')
+        ax3.grid(False)
 
+        # External force
         axs[2].set_title('External Force', loc='left')
-        axs[2].plot(force)
-        axs[2].set_xlabel('Timesteps')
+        axs[2].plot(time, force)
+        axs[2].set_xlabel('Time (s)')
         axs[2].set_ylabel('Force (N)', color='tab:blue')
         axs[2].tick_params(axis='y', labelcolor='tab:blue')
+
 
         fig.tight_layout()
         plt.show()
