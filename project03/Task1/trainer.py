@@ -13,16 +13,25 @@ class Trainer():
     """Trainer class for the external force function"""
 
     def __init__(self, pendulum):
-
-        self.model = NNAnsatz(4, 1, 4, 32)
+        self.model = NNAnsatz(1, 1, 1, 32)
         self.pendulum = pendulum
 
-    def loss(self, state):
+    def loss(self, states):
         """Residual of the state of the pendulum"""
-        x, x_dot, theta, theta_dot = state
+        thetas = states[:, 2]
+        theta_dots = states[:, 3]
 
-        # Combine the losses
-        return 10*torch.sin(theta)**2 + theta_dot**2
+        # 3/4s of the steps
+        steps = len(thetas)
+        tau = int(3*steps/4)
+
+        # Angle with respect to the vertical position
+        angle_loss = torch.mean(torch.sin(thetas[tau:]/2)**2)
+
+        # Angular velocity loss
+        angular_velocity_loss = torch.mean((theta_dots[tau:]) ** 2)
+
+        return angle_loss + 0.1 * angular_velocity_loss
 
     @staticmethod
     def norm_state(state):
@@ -33,36 +42,33 @@ class Trainer():
                         ) / state_normed.std(dim=0)
         return state_normed
 
-    def train(self, initial_state, dt, epochs, steps, lr=1e-3):
+    def train(self, initial_state, dt, epochs, steps, lr=1e-3, step_size=100, gamma=0.1):
         """Trains the model"""
         hist_train = []
         optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            optimizer, step_size=step_size, gamma=gamma)
 
         for i in range(epochs):
             state = initial_state.detach().clone().requires_grad_(True)
-            loss_sum = 0
 
+            states = []
+            optimizer.zero_grad()
             for step in range(steps):
-                optimizer.zero_grad()
-
-                # Normalize the state
-                state_normed = self.norm_state(state)
-
-                # Get new force
-                external_force = self.model(state_normed)[0]
+                external_force = self.model(step*dt*torch.ones(1))[0]
                 new_state = self.pendulum.RK_step(state, external_force, dt)
+                states.append(new_state)
+                state = new_state
 
-                loss = self.loss(new_state)
-                loss.backward()
-                optimizer.step()
+            states = torch.stack(states)
+            loss = self.loss(states)
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
 
-                loss_sum += loss.item()
-                state = new_state.detach()
-
-            loss_sum /= steps
-            hist_train.append(loss_sum)
+            hist_train.append(loss.item())
             if i % 10 == 0:
-                print(f"##### Epoch: {i}, Loss: {loss_sum}")
+                print(f"##### Epoch: {i}, Loss: {loss.item()}")
 
         return hist_train
 
@@ -71,10 +77,8 @@ class Trainer():
         states = []
         external_forces = []
         state = initial_state.detach().clone()
-        for _ in range(steps):
-            state_normed = self.norm_state(state)
-
-            external_force = self.model(state_normed)[0]
+        for step in range(steps):
+            external_force = self.model(step*dt*torch.ones(1))[0]
             state = self.pendulum.RK_step(state, external_force, dt)
             states.append(state)
             external_forces.append(external_force)
