@@ -41,17 +41,17 @@ class Trainer():
             optimizer, step_size=step_size, gamma=gamma)
 
         for i in range(epochs):
-            state = initial_state.detach().clone().requires_grad_(True)
-
-            states = []
             optimizer.zero_grad()
+
+            # Simulate the pendulum with the model for the force
+            states = []
+            state = initial_state.detach().clone().requires_grad_(True)
             for step in range(steps):
                 external_force = self.model(step*dt*torch.ones(1))[0]
-                new_state = self.pendulum.RK_step(state, external_force, dt)
-                states.append(new_state)
-                state = new_state
-
+                state = self.pendulum.RK_step(state, external_force, dt)
+                states.append(state)
             states = torch.stack(states)
+
             loss = self.loss(states)
             loss.backward()
             optimizer.step()
@@ -83,6 +83,7 @@ class Trainer():
         fig = plt.figure(dpi=100, figsize=(7, 4))
         plt.plot(np.arange(1, len(hist_train)+1),
                  hist_train, label="Train", linewidth=2)
+
         plt.grid(True)
         # plt.xscale("log")
         plt.yscale("log")
