@@ -33,15 +33,6 @@ class Trainer():
 
         return angle_loss + 0.1 * angular_velocity_loss
 
-    @staticmethod
-    def norm_state(state):
-        """Normalize the state"""
-        # Normalize the state
-        state_normed = state
-        state_normed = (state_normed - state_normed.mean(dim=0)
-                        ) / state_normed.std(dim=0)
-        return state_normed
-
     def train(self, initial_state, dt, epochs, steps, lr=1e-3, step_size=100, gamma=0.1):
         """Trains the model"""
         hist_train = []
@@ -85,7 +76,7 @@ class Trainer():
 
         return torch.stack(states).detach(), torch.stack(external_forces).detach()
 
-    def plot_loss_function(self, hist_train, save=False):
+    def plot_loss_function(self, hist_train):
         """Plot the loss function normalized in log scale."""
         hist_train = np.array(hist_train)
 
@@ -99,7 +90,5 @@ class Trainer():
         plt.ylabel("Loss")
         plt.legend()
         plt.tight_layout()
-        if save:
-            plt.savefig('loss_function.pdf')
         plt.show()
         return fig
