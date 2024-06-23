@@ -96,7 +96,7 @@ class InvertedPendulum:
         return anim
 
     @staticmethod
-    def plot(states, force, dt):
+    def plot(states, force, dt, line=False):
         """Plots the relevant variables of the pendulum"""
         x = states[:, 0]
         x_dot = states[:, 1]
@@ -129,8 +129,9 @@ class InvertedPendulum:
         axs[1].set_ylim(0, 2*torch.pi+0.2)
         axs[1].tick_params(axis='y', labelcolor='tab:blue')
 
-        # vertical line at 3/4 of the plot in axis 
-        axs[1].axvline(x=3*time[-1]/4, color='k', linestyle='--')
+        if line:
+            # vertical line at 3/4 of the plot in axis 
+            axs[1].axvline(x=3*time[-1]/4, color='k', linestyle='--')
 
         # Second y-axis for angular velocity
         ax3 = axs[1].twinx()
