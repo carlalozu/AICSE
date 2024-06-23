@@ -299,3 +299,6 @@ results/
 
 # Data files
 *.npz
+
+# Pycache files
+__pycache__/
