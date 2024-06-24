@@ -2,7 +2,7 @@
 """Class to find differential equations based on data"""
 import numpy as np
 import matplotlib.pyplot as plt
-import pysindy as ps
+from finite_differences import FiniteDifference
 from matplotlib.animation import FuncAnimation
 from copy import deepcopy
 import torch
@@ -50,7 +50,7 @@ class PDE_FIND():
         """Set classify dictionary"""
         self.classify = deepcopy(classify)
 
-    def create_list_of_possible_terms(self, classify):
+    def create_list_of_possible_terms(self, classify, max_terms=100):
         """Create list of possible terms for the PDE"""
         # list derivatives
         classify['derivatives'] = []
@@ -86,7 +86,9 @@ class PDE_FIND():
                         if '_t' not in classify['terms'][j]:
                             classify['terms'].append(
                                 f'{classify["terms"][i]}*{classify["terms"][j]}')
-                    if len(classify['terms']) > 100:
+                    if len(classify['terms']) > max_terms:
+                        # restrict to around max_terms number of terms,
+                        # otherwise the computation will take too long
                         break
 
         # add time derivatives
@@ -108,7 +110,7 @@ class PDE_FIND():
             else:
                 temp_periodic = periodic
             for d in ind:
-                fd = ps.FiniteDifference(
+                fd = FiniteDifference(
                     axis=self.vars[d]-len(classify['dep']),
                     periodic=temp_periodic)
                 data = fd(data, self.axis[d])
