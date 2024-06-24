@@ -5,19 +5,16 @@ import matplotlib.pyplot as plt
 import pysindy as ps
 from matplotlib.animation import FuncAnimation
 from copy import deepcopy
+import torch
 
-# Ignore matplotlib deprecation warnings
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning)
-
-
-class DifferentialEquation():
+class PDE_FIND():
     """Differential equation for 2D data"""
 
     def __init__(self, name):
         self.data, self.vars = self.open_data_file(name)
         print(self.data.shape)
         self.unpack_data()
+        self.classify = {}
 
     @staticmethod
     def open_data_file(name):
@@ -30,9 +27,10 @@ class DifferentialEquation():
 
         arrays = []
         for var in variables:
-            arrays.append(data[var])
+            # convert to torch tensor
+            arrays.append(torch.tensor(data[var]))
 
-        return np.stack(arrays), variables
+        return torch.stack(arrays), variables
 
     def unpack_data(self):
         """Get principal variables and components"""
@@ -47,6 +45,10 @@ class DifferentialEquation():
 
         self.axis = axis
 
+    def set_classify(self, classify):
+        """Set classify dictionary"""
+        self.classify = deepcopy(classify)
+
     def create_list_of_possible_terms(self, classify):
         """Create list of possible terms for the PDE"""
         # list derivatives
@@ -59,15 +61,16 @@ class DifferentialEquation():
                         classify['derivatives'].append(f'{d}_{i}{j}')
 
         # initialize list of possible terms
-        classify['terms'] = [classify['dep']] + classify['derivatives']
+        classify['terms'] = classify['dep'].copy() + classify['derivatives'].copy()
+        classify['terms'].remove('u_t')
 
         # add combinations of terms to the list of possible terms
         for i in range(len(classify['terms'])):
-            if classify['terms'][i] != 'u_t':
+            if '_t' not in classify['terms'][i]:
                 for j in range(i, len(classify['terms'])):
                     # at most 3 terms
                     if len(classify['terms'][j].split('*')) < 3:
-                        if classify['terms'][j] != 'u_t':
+                        if '_t' not in classify['terms'][j]:
                             classify['terms'].append(
                                 f'{classify["terms"][i]}*{classify["terms"][j]}')
 
@@ -77,16 +80,16 @@ class DifferentialEquation():
         for der in classify['derivatives']:
             v = der.split('_')[0]
             ind = der.split('_')[1]
-            data = deepcopy(self.u[self.vars[v], :])
+            data = deepcopy(self.u[self.vars[v], :]).numpy()
             for d in ind:
                 fd = ps.FiniteDifference(
                     axis=self.vars[d]-len(classify['dep']))
                 data = fd(data, self.axis[d])
-            derivatives[der] = data.reshape(1, len(self.x), len(self.t))
+            derivatives[der] = torch.tensor(data.reshape(1, *data.shape))
 
         return derivatives
 
-    def create_feature_library_(self, classify, derivatives):
+    def create_feature_library(self, classify, derivatives):
         """Use derivatives and functions to create a library"""
         print(len(classify['terms']))
         library = []
@@ -99,41 +102,16 @@ class DifferentialEquation():
                 else:
                     library_object.append(derivatives[component])
 
-            library.append(np.prod(library_object, axis=1))
+            # TODO: change to torch not numpy
+            library.append(torch.tensor(np.prod(library_object, axis=0)))
 
         assert len(library) == len(classify['terms'])
         return library
 
-    def create_feature_library(self):
-        """Find differential equations"""
-        # Define PDE library that is quadratic in u,
-        # and second-order in spatial derivatives of u.
-        library_functions = [lambda x: x, lambda x: x * x]
-        library_function_names = [lambda x: x, lambda x: x + x]
-        pde_lib = ps.PDELibrary(
-            library_functions=library_functions,
-            function_names=library_function_names,
-            derivative_order=3,
-            spatial_grid=self.x,
-            is_uniform=True)
-        self.pde_lib = pde_lib
-
-    def perform_computations(self, optimizer):
-        """Find differential equations"""
-        print(optimizer.__doc__.split('\n')[0])
-        # Fit the model with different optimizers.
-        model = ps.SINDy(feature_library=self.pde_lib, optimizer=optimizer)
-        u_ = self.u.reshape(len(self.x), len(self.t), 1)
-        model.fit(u_, t=self.axis['t'])
-        model.print()
-
-    def plot(self, derivatives, name):
+    def plot(self, data, name):
         """Plot u and u dot in two subplots"""
 
         fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-
-        v, ind = name.split('_')
-        ind = '{'+ind+'}'
 
         ax[0].pcolormesh(self.t, self.x, self.u[0, :, :])
         ax[0].set_title(r'$u(x, t)$')
@@ -141,8 +119,8 @@ class DifferentialEquation():
         ax[0].set_ylabel(r'$x$')
 
         # get derivative
-        ax[1].pcolormesh(self.t, self.x, derivatives[name][0, :, :])
-        ax[1].set_title(f'${v}_{ind}(x, t)$')
+        ax[1].pcolormesh(self.t, self.x, data[0, :, :])
+        ax[1].set_title(f'${name}(x, t)$')
         ax[1].set_xlabel(r'$t$')
         ax[1].set_ylabel(r'$x$')
 
@@ -150,8 +128,8 @@ class DifferentialEquation():
         return fig
 
 
-class DifEq3(DifferentialEquation):
-    """Differential equation for 3D data"""
+class PDE_FIND_3D(PDE_FIND):
+    """Differential equation finder for 3D data"""
 
     def unpack_data(self):
         """Get principal variables and components"""
@@ -161,59 +139,24 @@ class DifEq3(DifferentialEquation):
 
         self.u = self.data[0:2, :]  # contains u and v
 
-        self.dx = (self.x[1] - self.x[0]).item()
-        self.dy = (self.y[1] - self.y[0]).item()
-        self.dt = (self.t[1] - self.t[0]).item()
+        axis = {}
+        axis['t'] = (self.t[1] - self.t[0]).item()
+        axis['x'] = (self.x[1] - self.x[0]).item()
+        axis['y'] = (self.y[1] - self.y[0]).item()
 
-        X, Y = np.meshgrid(self.x, self.y)
-        self.spatial_grid = np.asarray([X, Y]).T
+        self.axis = axis
 
-    def create_feature_library(self):
-        # Odd polynomial terms in (u, v), up to second order derivatives
-        # in (u, v)
-
-        library_functions = [
-            lambda x: x,
-            lambda x: x * x * x,
-            lambda x, y: x * y * y,
-            lambda x, y: x * x * y,
-        ]
-        library_function_names = [
-            lambda x: x,
-            lambda x: x + x + x,
-            lambda x, y: x + y + y,
-            lambda x, y: x + x + y,
-        ]
-        pde_lib = ps.PDELibrary(
-            library_functions=library_functions,
-            function_names=library_function_names,
-            derivative_order=2,
-            spatial_grid=self.spatial_grid,
-            include_bias=True,
-            is_uniform=True,
-            periodic=True
-        )
-        self.pde_lib = pde_lib
-
-    def perform_computations(self, optimizer, percent):
-        """Find differential equations"""
-        print(optimizer.__doc__.split('\n')[0])
-        model = ps.SINDy(feature_library=self.pde_lib, optimizer=optimizer)
-        u_, u_t_ = self.subsample_data(percent)
-        model.fit(u_, x_dot=u_t_)
-        model.print()
-
-    def subsample_data(self, percent=0.6):
-        """Subsample data to n points"""
-        # Resample is possible because we are also passing the derivative to the
-        # solver
-        train = np.random.choice(
-            len(self.t), int(len(self.t) * percent), replace=False)
-        u_ = self.u[:, :, :, train]
-        u_ = u_.reshape(len(self.x), len(self.y), len(train), 2)
-        u_t_ = self.u_t[:, :, :, train]
-        u_t_ = u_t_.reshape(len(self.x), len(self.y), len(train), 2)
-        return u_, u_t_
+    # def subsample_data(self, percent=0.6):
+    #     """Subsample data to n points"""
+    #     # Resample is possible because we are also passing the derivative to the
+    #     # solver
+    #     train = np.random.choice(
+    #         len(self.t), int(len(self.t) * percent), replace=False)
+    #     u_ = self.u[:, :, :, train]
+    #     u_ = u_.reshape(len(self.x), len(self.y), len(train), 2)
+    #     u_t_ = self.u_t[:, :, :, train]
+    #     u_t_ = u_t_.reshape(len(self.x), len(self.y), len(train), 2)
+    #     return u_, u_t_
 
     def animate(self, idx):
         """Create animation of the data for a given index over time"""
