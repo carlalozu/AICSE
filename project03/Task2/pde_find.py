@@ -6,6 +6,7 @@ import pysindy as ps
 from matplotlib.animation import FuncAnimation
 from copy import deepcopy
 import torch
+from sklearn.linear_model import Ridge
 
 class PDE_FIND():
     """Differential equation for 2D data"""
@@ -55,10 +56,17 @@ class PDE_FIND():
         classify['derivatives'] = []
         for d in classify['dep']:
             for i in classify['indep']:
+                # first derivative
                 classify['derivatives'].append(f'{d}_{i}')
                 for j in classify['indep']:
+                    # second derivative
                     if 't' not in i+j and f'{d}_{j+i}' not in classify['derivatives']:
                         classify['derivatives'].append(f'{d}_{i}{j}')
+                    for k in classify['indep']:
+                        # third derivative
+                        if 't' not in i+j+k and f'{d}_{j+i+k}' not in classify['derivatives']:
+                            classify['derivatives'].append(f'{d}_{i}{j}{k}')
+
 
         # initialize list of possible terms
         classify['terms'] = classify['dep'].copy() + classify['derivatives'].copy()
@@ -68,14 +76,14 @@ class PDE_FIND():
         for i in range(len(classify['terms'])):
             if '_t' not in classify['terms'][i]:
                 for j in range(i, len(classify['terms'])):
-                    # at most 3 terms
-                    if len(classify['terms'][j].split('*')) < 3:
+                    # at most 2 terms
+                    if len(classify['terms'][j].split('*')) < 2:
                         if '_t' not in classify['terms'][j]:
                             classify['terms'].append(
                                 f'{classify["terms"][i]}*{classify["terms"][j]}')
 
     def get_derivatives(self, classify):
-        """Calculate derivative using finite differences"""
+        """Calculate partial derivatives using finite differences"""
         derivatives = {}
         for der in classify['derivatives']:
             v = der.split('_')[0]
@@ -91,7 +99,7 @@ class PDE_FIND():
 
     def create_feature_library(self, classify, derivatives):
         """Use derivatives and functions to create a library"""
-        print(len(classify['terms']))
+        print(len(classify['terms']), 'terms')
         library = []
         for term in classify['terms']:
             components = term.split('*')
@@ -106,7 +114,7 @@ class PDE_FIND():
             library.append(torch.tensor(np.prod(library_object, axis=0)))
 
         assert len(library) == len(classify['terms'])
-        return library
+        classify['library'] = torch.stack(library, dim=1).squeeze()
 
     def plot(self, data, name):
         """Plot u and u dot in two subplots"""
@@ -119,13 +127,42 @@ class PDE_FIND():
         ax[0].set_ylabel(r'$x$')
 
         # get derivative
-        ax[1].pcolormesh(self.t, self.x, data[0, :, :])
+        ax[1].pcolormesh(self.t, self.x, data)
         ax[1].set_title(f'${name}(x, t)$')
         ax[1].set_xlabel(r'$t$')
         ax[1].set_ylabel(r'$x$')
 
         fig.show()
         return fig
+
+    def solve(self, library, y_train):
+        """Solve the linear regression problem using Ridge regression"""
+        inputs = library.flatten(start_dim=1)
+        target = y_train.flatten()
+
+        # Fit the Ridge regression model
+        model = Ridge(alpha=1.0, fit_intercept=False, tol=1e-6, solver='cholesky')
+        model.fit(inputs.T, target)
+
+        return torch.tensor(model.coef_)
+
+    def test(self, library, weights, no_terms=0):
+        """Test the neural net"""
+        components = library['library']
+        names = library['terms']
+        dim = len(components)
+        y_pred = torch.sum(weights.view(dim, 1, 1) * components, dim=0)
+        used = [f'{weight:.2e}*{term}' for term,
+                weight in zip(names, weights.numpy()) if weight != 0]
+        
+        if no_terms:
+            # retain largest terms given by no_terms
+            idx = torch.argsort(torch.abs(weights), descending=True)
+            idx = idx[:no_terms]
+            used = [f'{weights[i]:.2e}*{names[i]}' for i in idx]
+
+        print(' + '.join(used)+' = u_t')
+        return y_pred.reshape(1, *y_pred.shape)
 
 
 class PDE_FIND_3D(PDE_FIND):
