@@ -80,7 +80,7 @@ class Trainer():
         """Plot the loss function normalized in log scale."""
         hist_train = np.array(hist_train)
 
-        fig = plt.figure(dpi=100, figsize=(7, 4))
+        fig = plt.figure(dpi=100, figsize=(7, 3))
         plt.plot(np.arange(1, len(hist_train)+1),
                  hist_train, label="Train", linewidth=2)
 
