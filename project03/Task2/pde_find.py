@@ -57,20 +57,25 @@ class PDE_FIND():
         for d in classify['dep']:
             for i in classify['indep']:
                 # first derivative
-                classify['derivatives'].append(f'{d}_{i}')
+                if i != 't':
+                    classify['derivatives'].append(f'{d}_{i}')
+                else:
+                    continue
                 for j in classify['indep']:
                     # second derivative
-                    if 't' not in i+j and f'{d}_{j+i}' not in classify['derivatives']:
+                    if j != 't' and f'{d}_{j+i}' not in classify['derivatives']:
                         classify['derivatives'].append(f'{d}_{i}{j}')
+                    else:
+                        continue
                     for k in classify['indep']:
                         # third derivative
-                        if 't' not in i+j+k and f'{d}_{j+i+k}' not in classify['derivatives']:
+                        if k != 't' and (f'{d}_{j+i+k}' not in classify['derivatives']
+                                         or f'{d}_{i+j+k}' not in classify['derivatives']):
                             classify['derivatives'].append(f'{d}_{i}{j}{k}')
 
 
         # initialize list of possible terms
         classify['terms'] = classify['dep'].copy() + classify['derivatives'].copy()
-        classify['terms'].remove('u_t')
 
         # add combinations of terms to the list of possible terms
         for i in range(len(classify['terms'])):
@@ -81,47 +86,70 @@ class PDE_FIND():
                         if '_t' not in classify['terms'][j]:
                             classify['terms'].append(
                                 f'{classify["terms"][i]}*{classify["terms"][j]}')
+                    if len(classify['terms']) > 100:
+                        break
 
-    def get_derivatives(self, classify):
+        # add time derivatives
+        for i in classify['dep']:
+            classify['derivatives'].append(f'{i}_t')
+
+        print(len(classify['terms']), 'terms')
+        print(classify['terms'])
+
+    def get_derivatives(self, classify, periodic=False):
         """Calculate partial derivatives using finite differences"""
         derivatives = {}
         for der in classify['derivatives']:
             v = der.split('_')[0]
             ind = der.split('_')[1]
             data = deepcopy(self.u[self.vars[v], :]).numpy()
+            if ind == 't' and periodic:
+                temp_periodic = False
+            else:
+                temp_periodic = periodic
             for d in ind:
                 fd = ps.FiniteDifference(
-                    axis=self.vars[d]-len(classify['dep']))
+                    axis=self.vars[d]-len(classify['dep']),
+                    periodic=temp_periodic)
                 data = fd(data, self.axis[d])
             derivatives[der] = torch.tensor(data.reshape(1, *data.shape))
 
+        print(len(derivatives), 'derivatives computed')
+        print(derivatives.keys())
         return derivatives
 
     def create_feature_library(self, classify, derivatives):
         """Use derivatives and functions to create a library"""
         print(len(classify['terms']), 'terms')
         library = []
-        for term in classify['terms']:
-            components = term.split('*')
-            library_object = []
-            for component in components:
-                if len(component) == 1:
-                    library_object.append(self.u)
+        for i, term in enumerate(classify['terms']):
+            terms = term.split('*')
+            components = []
+            for term in terms:
+                if len(term) == 1:
+                    data = self.u[self.vars[term], :]
+                    data = data.reshape(1, *data.shape)
+                    components.append(data)
                 else:
-                    library_object.append(derivatives[component])
-
+                    components.append(derivatives[term])
             # TODO: change to torch not numpy
-            library.append(torch.tensor(np.prod(library_object, axis=0)))
+            library_object = torch.tensor(np.prod(components, axis=0))
+
+            if not i:
+                library = library_object
+            else:
+                library = torch.cat((library, library_object), dim=0)
+            print('term', '*'.join(terms), 'done', f"{i+1}/{len(classify['terms'])}")
 
         assert len(library) == len(classify['terms'])
-        classify['library'] = torch.stack(library, dim=1).squeeze()
+        classify['library'] = library.squeeze()
 
-    def plot(self, data, name):
+    def plot(self, data, name, idx=0):
         """Plot u and u dot in two subplots"""
 
         fig, ax = plt.subplots(1, 2, figsize=(10, 5))
 
-        ax[0].pcolormesh(self.t, self.x, self.u[0, :, :])
+        ax[0].pcolormesh(self.t, self.x, self.u[idx, :, :])
         ax[0].set_title(r'$u(x, t)$')
         ax[0].set_xlabel(r'$t$')
         ax[0].set_ylabel(r'$x$')
@@ -141,27 +169,35 @@ class PDE_FIND():
         target = y_train.flatten()
 
         # Fit the Ridge regression model
-        model = Ridge(alpha=1.0, fit_intercept=False, tol=1e-6, solver='cholesky')
+        model = Ridge(alpha=1.0, fit_intercept=False, tol=1e-9)
         model.fit(inputs.T, target)
 
-        return torch.tensor(model.coef_)
+        weights = torch.tensor(model.coef_)
+        # enforce sparsity
+        weights[torch.abs(weights) < 1e-2] = 0
+        return weights
 
-    def test(self, library, weights, no_terms=0):
+    def test(self, library, weights, no_terms=0, name='u'):
         """Test the neural net"""
         components = library['library']
         names = library['terms']
-        dim = len(components)
-        y_pred = torch.sum(weights.view(dim, 1, 1) * components, dim=0)
-        used = [f'{weight:.2e}*{term}' for term,
+
+        # create tensor on ones with the same shape as the components
+        dim = len(components.shape)-1
+        inputs = len(components)
+        y_pred = torch.sum(weights.view(inputs, *([1]*dim)) * components, dim=0)
+        used = [f'{weight:.2}*{term}' for term,
                 weight in zip(names, weights.numpy()) if weight != 0]
-        
+
         if no_terms:
             # retain largest terms given by no_terms
             idx = torch.argsort(torch.abs(weights), descending=True)
             idx = idx[:no_terms]
-            used = [f'{weights[i]:.2e}*{names[i]}' for i in idx]
+            used = [f'{weights[i]:.2}{names[i]}' for i in idx]
 
-        print(' + '.join(used)+' = u_t')
+        print("Number of terms:", len(used))
+        print('PDE:')
+        print('\t' + ' + '.join(used) + f' = {name}_t')
         return y_pred.reshape(1, *y_pred.shape)
 
 
@@ -183,17 +219,15 @@ class PDE_FIND_3D(PDE_FIND):
 
         self.axis = axis
 
-    # def subsample_data(self, percent=0.6):
-    #     """Subsample data to n points"""
-    #     # Resample is possible because we are also passing the derivative to the
-    #     # solver
-    #     train = np.random.choice(
-    #         len(self.t), int(len(self.t) * percent), replace=False)
-    #     u_ = self.u[:, :, :, train]
-    #     u_ = u_.reshape(len(self.x), len(self.y), len(train), 2)
-    #     u_t_ = self.u_t[:, :, :, train]
-    #     u_t_ = u_t_.reshape(len(self.x), len(self.y), len(train), 2)
-    #     return u_, u_t_
+    def subsample_data(self, derivatives, percent=0.6):
+        """Subsample data to n points"""
+        # Resample is possible because we are also passing the derivative to 
+        # the solver
+        subsample = np.random.choice(
+            len(self.t), int(len(self.t) * percent), replace=False)
+        self.u = self.u[:, :, :, subsample]
+        for key in derivatives:
+            derivatives[key] = derivatives[key][:, :, :, subsample]
 
     def animate(self, idx):
         """Create animation of the data for a given index over time"""
@@ -215,3 +249,25 @@ class PDE_FIND_3D(PDE_FIND):
                              init_func=init, blit=True)
 
         return anim
+
+    def plot(self, data, name, idx=0):
+        """Plot var and var dot in two subplots"""
+
+        # get dep var
+        var = name.split('_')[0]
+
+        fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+
+        ax[0].pcolormesh(self.x, self.y, self.u[self.vars[var], :, :, idx])
+        ax[0].set_title(f'${var}(x, t)$')
+        ax[0].set_xlabel('$t$')
+        ax[0].set_ylabel('$x$')
+
+        # get derivative
+        ax[1].pcolormesh(self.x, self.y, data[:, :, idx])
+        ax[1].set_title(f'${name}(x, t)$')
+        ax[1].set_xlabel('$t$')
+        ax[1].set_ylabel('$x$')
+
+        fig.show()
+        return fig
