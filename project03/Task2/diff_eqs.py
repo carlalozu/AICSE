@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pysindy as ps
 from matplotlib.animation import FuncAnimation
+from copy import deepcopy
 
 # Ignore matplotlib deprecation warnings
 import warnings
@@ -17,35 +18,91 @@ class DifferentialEquation():
         self.data, self.vars = self.open_data_file(name)
         print(self.data.shape)
         self.unpack_data()
-        self.get_derivatives()
-        self.create_feature_library()
 
     @staticmethod
     def open_data_file(name):
         """Read npz file and save to torch"""
         data = np.load(f'data/{name}.npz')
 
+        # create dict of variables and positions
+        variables = {var: i for i, var in enumerate(data.files)}
+        print(variables)
+
         arrays = []
-        for i, var in enumerate(data.files):
-            print(f'{i}: {var}')
+        for var in variables:
             arrays.append(data[var])
 
-        return np.stack(arrays), data.files
+        return np.stack(arrays), variables
 
     def unpack_data(self):
         """Get principal variables and components"""
         self.x = self.data[1, :, 0]
         self.t = self.data[2, 0, :]
 
-        self.u = self.data[0, :]
+        self.u = self.data[0, :].reshape(1, len(self.x), len(self.t))
 
-        self.dt = (self.t[1] - self.t[0]).item()
-        self.dx = (self.x[1] - self.x[0]).item()
+        axis = {}
+        axis['t'] = (self.t[1] - self.t[0]).item()
+        axis['x'] = (self.x[1] - self.x[0]).item()
 
-    def get_derivatives(self):
+        self.axis = axis
+
+    def create_list_of_possible_terms(self, classify):
+        """Create list of possible terms for the PDE"""
+        # list derivatives
+        classify['derivatives'] = []
+        for d in classify['dep']:
+            for i in classify['indep']:
+                classify['derivatives'].append(f'{d}_{i}')
+                for j in classify['indep']:
+                    if 't' not in i+j and f'{d}_{j+i}' not in classify['derivatives']:
+                        classify['derivatives'].append(f'{d}_{i}{j}')
+
+        # initialize list of possible terms
+        classify['terms'] = [classify['dep']] + classify['derivatives']
+
+        # add combinations of terms to the list of possible terms
+        for i in range(len(classify['terms'])):
+            if classify['terms'][i] != 'u_t':
+                for j in range(i, len(classify['terms'])):
+                    # at most 3 terms
+                    if len(classify['terms'][j].split('*')) < 3:
+                        if classify['terms'][j] != 'u_t':
+                            classify['terms'].append(
+                                f'{classify["terms"][i]}*{classify["terms"][j]}')
+
+    def get_derivatives(self, classify):
         """Calculate derivative using finite differences"""
-        fd = ps.FiniteDifference(axis=-1)
-        self.u_t = fd._differentiate(self.u, self.dt)
+        derivatives = {}
+        for der in classify['derivatives']:
+            v = der.split('_')[0]
+            ind = der.split('_')[1]
+            data = deepcopy(self.u[self.vars[v], :])
+            for d in ind:
+                fd = ps.FiniteDifference(
+                    axis=self.vars[d]-len(classify['dep']))
+                data = fd(data, self.axis[d])
+            derivatives[der] = data.reshape(1, len(self.x), len(self.t))
+
+        return derivatives
+
+    def create_feature_library_(self, classify, derivatives):
+        """Use derivatives and functions to create a library"""
+        print(len(classify['terms']))
+        library = []
+        for term in classify['terms']:
+            components = term.split('*')
+            library_object = []
+            for component in components:
+                if len(component) == 1:
+                    library_object.append(self.u)
+                else:
+                    library_object.append(derivatives[component])
+
+            library.append(np.prod(library_object, axis=1))
+
+        assert len(library) == len(classify['terms'])
+        return library
 
     def create_feature_library(self):
         """Find differential equations"""
@@ -67,22 +124,25 @@ class DifferentialEquation():
         # Fit the model with different optimizers.
         model = ps.SINDy(feature_library=self.pde_lib, optimizer=optimizer)
         u_ = self.u.reshape(len(self.x), len(self.t), 1)
-        model.fit(u_, t=self.dt)
+        model.fit(u_, t=self.axis['t'])
         model.print()
 
-    def plot(self):
+    def plot(self, derivatives, name):
         """Plot u and u dot in two subplots"""
 
         fig, ax = plt.subplots(1, 2, figsize=(10, 5))
 
-        ax[0].pcolormesh(self.t, self.x, self.u)
+        v, ind = name.split('_')
+        ind = '{'+ind+'}'
+
+        ax[0].pcolormesh(self.t, self.x, self.u[0, :, :])
         ax[0].set_title(r'$u(x, t)$')
         ax[0].set_xlabel(r'$t$')
         ax[0].set_ylabel(r'$x$')
 
         # get derivative
-        ax[1].pcolormesh(self.t, self.x, self.u_t)
-        ax[1].set_title(r'$\dot{u}(x, t)$')
+        ax[1].pcolormesh(self.t, self.x, derivatives[name][0, :, :])
+        ax[1].set_title(f'${v}_{ind}(x, t)$')
         ax[1].set_xlabel(r'$t$')
         ax[1].set_ylabel(r'$x$')
 
