@@ -69,7 +69,7 @@ class InvertedPendulum:
         time = torch.arange(0, len(states)*dt, dt)
 
         cart = plt.Rectangle((-0.1, -0.05), 0.2, 0.1, fill=True)
-        pendulum, = ax.plot([], [], '-', lw=1.5, color='tab:orange')
+        pendulum, = ax.plot([], [], '-', lw=1.5, color='tab:pink')
 
         def init():
             # Initial axis lims
@@ -117,9 +117,9 @@ class InvertedPendulum:
 
         # Second y-axis for velocity but delete grid
         ax2 = axs[0].twinx()
-        ax2.plot(time, x_dot, label=r'$\dot{x}$', color='tab:orange', zorder=2)
-        ax2.set_ylabel('Velocity (m/s)', color='tab:orange')
-        ax2.tick_params(axis='y', labelcolor='tab:orange')
+        ax2.plot(time, x_dot, label=r'$\dot{x}$', color='tab:pink', zorder=2)
+        ax2.set_ylabel('Velocity (m/s)', color='tab:pink')
+        ax2.tick_params(axis='y', labelcolor='tab:pink')
         ax2.grid(False)
 
         # Pendulum variables
@@ -135,9 +135,9 @@ class InvertedPendulum:
 
         # Second y-axis for angular velocity
         ax3 = axs[1].twinx()
-        ax3.plot(time, theta_dot, label=r'$\dot{\theta}$', color='tab:orange')
-        ax3.set_ylabel('Angular Velocity (rad/s)', color='tab:orange')
-        ax3.tick_params(axis='y', labelcolor='tab:orange')
+        ax3.plot(time, theta_dot, label=r'$\dot{\theta}$', color='tab:pink')
+        ax3.set_ylabel('Angular Velocity (rad/s)', color='tab:pink')
+        ax3.tick_params(axis='y', labelcolor='tab:pink')
         ax3.grid(False)
 
         # External force
