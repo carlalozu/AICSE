@@ -1,12 +1,16 @@
 
 """Class to find differential equations based on data"""
+from copy import deepcopy
+import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from finite_differences import FiniteDifference
 from matplotlib.animation import FuncAnimation
-from copy import deepcopy
-import torch
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import LassoCV
+
+import seaborn as sns
+sns.set()
+plt.rcParams['image.cmap'] = 'plasma'
 
 class PDE_FIND():
     """Differential equation for 2D data"""
@@ -50,8 +54,10 @@ class PDE_FIND():
         """Set classify dictionary"""
         self.classify = deepcopy(classify)
 
-    def create_list_of_possible_terms(self, classify, max_terms=100):
-        """Create list of possible terms for the PDE"""
+    def create_list_of_possible_terms(self, classify, order=3, max_terms=100):
+        """Create list of possible terms for the PDE
+        order: maximum order of derivatives (1,2 or 3)
+        """
         # list derivatives
         classify['derivatives'] = []
         for d in classify['dep']:
@@ -61,18 +67,20 @@ class PDE_FIND():
                     classify['derivatives'].append(f'{d}_{i}')
                 else:
                     continue
-                for j in classify['indep']:
-                    # second derivative
-                    if j != 't' and f'{d}_{j+i}' not in classify['derivatives']:
-                        classify['derivatives'].append(f'{d}_{i}{j}')
-                    else:
-                        continue
-                    for k in classify['indep']:
-                        # third derivative
-                        if k != 't' and (f'{d}_{j+i+k}' not in classify['derivatives']
-                                         or f'{d}_{i+j+k}' not in classify['derivatives']):
-                            classify['derivatives'].append(f'{d}_{i}{j}{k}')
-
+                if order > 1:
+                    for j in classify['indep']:
+                        # second derivative
+                        if j != 't' and f'{d}_{j+i}' not in classify['derivatives']:
+                            classify['derivatives'].append(f'{d}_{i}{j}')
+                        else:
+                            continue
+                        if order > 2:
+                            for k in classify['indep']:
+                                # third derivative
+                                if k != 't' and (f'{d}_{j+i+k}' not in classify['derivatives']
+                                                or f'{d}_{i+j+k}' not in classify['derivatives']):
+                                    classify['derivatives'].append(f'{d}_{i}{j}{k}')
+        # I know nested loops are not the best, but it works
 
         # initialize list of possible terms
         classify['terms'] = classify['dep'].copy() + classify['derivatives'].copy()
@@ -90,6 +98,17 @@ class PDE_FIND():
                         # restrict to around max_terms number of terms,
                         # otherwise the computation will take too long
                         break
+
+
+        # add multiplication of base vars
+        for i in classify['dep']:
+            for j in classify['dep']:
+                for k in classify['dep']:
+                    term = f'{i}*{j}*{k}'
+                    sorted_term = '*'.join(sorted(term.split('*')))
+                    if sorted_term not in classify['terms']:
+                        classify['terms'].append(term)
+
 
         # add time derivatives
         for i in classify['dep']:
@@ -149,7 +168,8 @@ class PDE_FIND():
     def plot(self, data, name, idx=0):
         """Plot u and u dot in two subplots"""
 
-        fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+        fig, ax = plt.subplots(1, 2, figsize=(9, 4))
+        fig.tight_layout()
 
         ax[0].pcolormesh(self.t, self.x, self.u[idx, :, :])
         ax[0].set_title(r'$u(x, t)$')
@@ -161,22 +181,22 @@ class PDE_FIND():
         ax[1].set_title(f'${name}(x, t)$')
         ax[1].set_xlabel(r'$t$')
         ax[1].set_ylabel(r'$x$')
-
-        fig.show()
         return fig
 
-    def solve(self, library, y_train):
-        """Solve the linear regression problem using Ridge regression"""
-        inputs = library.flatten(start_dim=1)
-        target = y_train.flatten()
+    def solve(self, inputs, target, sparsity_threshold, **kwargs):
+        """Solve the linear regression problem using Lasso regression"""
+        inputs_ = inputs.flatten(start_dim=1).numpy()
+        target_ = target.flatten().numpy()
 
-        # Fit the Ridge regression model
-        model = Ridge(alpha=1.0, fit_intercept=False, tol=1e-9)
-        model.fit(inputs.T, target)
+        # Fit the Lasso regression model
+        model = LassoCV(**kwargs)
+        model.fit(inputs_.T, target_)
+        print('Best alpha:', model.alpha_)
 
         weights = torch.tensor(model.coef_)
         # enforce sparsity
-        weights[torch.abs(weights) < 1e-2] = 0
+        weights[torch.abs(weights) < sparsity_threshold] = 0
+
         return weights
 
     def test(self, library, weights, no_terms=0, name='u'):
@@ -191,11 +211,13 @@ class PDE_FIND():
         used = [f'{weight:.2}*{term}' for term,
                 weight in zip(names, weights.numpy()) if weight != 0]
 
-        if no_terms:
-            # retain largest terms given by no_terms
-            idx = torch.argsort(torch.abs(weights), descending=True)
-            idx = idx[:no_terms]
-            used = [f'{weights[i]:.2}{names[i]}' for i in idx]
+        if not no_terms:
+            no_terms = len(used)
+
+        idx = torch.argsort(torch.abs(weights), descending=True)
+        # retain largest terms given by no_terms
+        idx = idx[:no_terms]
+        used = [f'{weights[i]:.2}{names[i]}' for i in idx]
 
         print("Number of terms:", len(used))
         print('PDE:')
@@ -223,8 +245,8 @@ class PDE_FIND_3D(PDE_FIND):
 
     def subsample_data(self, derivatives, percent=0.6):
         """Subsample data to n points"""
-        # Resample is possible because we are also passing the derivative to 
-        # the solver
+        # Subsample is possible because we are also passing the derivatives to 
+        # the solver, used in case of too many data points
         subsample = np.random.choice(
             len(self.t), int(len(self.t) * percent), replace=False)
         self.u = self.u[:, :, :, subsample]
@@ -271,5 +293,4 @@ class PDE_FIND_3D(PDE_FIND):
         ax[1].set_xlabel('$t$')
         ax[1].set_ylabel('$x$')
 
-        fig.show()
         return fig
