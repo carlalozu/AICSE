@@ -1,7 +1,6 @@
 
 """Class to find differential equations based on data"""
 from copy import deepcopy
-import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from finite_differences import FiniteDifference
@@ -11,6 +10,7 @@ from sklearn.linear_model import LassoCV
 import seaborn as sns
 sns.set()
 plt.rcParams['image.cmap'] = 'plasma'
+
 
 class PDE_FIND():
     """Differential equation for 2D data"""
@@ -23,7 +23,7 @@ class PDE_FIND():
 
     @staticmethod
     def open_data_file(name):
-        """Read npz file and save to torch"""
+        """Read npz file and save to np"""
         data = np.load(f'data/{name}.npz')
 
         # create dict of variables and positions
@@ -32,10 +32,9 @@ class PDE_FIND():
 
         arrays = []
         for var in variables:
-            # convert to torch tensor
-            arrays.append(torch.tensor(data[var]))
+            arrays.append(data[var])
 
-        return torch.stack(arrays), variables
+        return np.stack(arrays), variables
 
     def unpack_data(self):
         """Get principal variables and components"""
@@ -78,12 +77,14 @@ class PDE_FIND():
                             for k in classify['indep']:
                                 # third derivative
                                 if k != 't' and (f'{d}_{j+i+k}' not in classify['derivatives']
-                                                or f'{d}_{i+j+k}' not in classify['derivatives']):
-                                    classify['derivatives'].append(f'{d}_{i}{j}{k}')
+                                                 or f'{d}_{i+j+k}' not in classify['derivatives']):
+                                    classify['derivatives'].append(
+                                        f'{d}_{i}{j}{k}')
         # I know nested loops are not the best, but it works
 
         # initialize list of possible terms
-        classify['terms'] = classify['dep'].copy() + classify['derivatives'].copy()
+        classify['terms'] = classify['dep'].copy() + \
+            classify['derivatives'].copy()
 
         # add combinations of terms to the list of possible terms
         for i in range(len(classify['terms'])):
@@ -99,7 +100,6 @@ class PDE_FIND():
                         # otherwise the computation will take too long
                         break
 
-
         # add multiplication of base vars
         for i in classify['dep']:
             for j in classify['dep']:
@@ -108,7 +108,6 @@ class PDE_FIND():
                     sorted_term = '*'.join(sorted(term.split('*')))
                     if sorted_term not in classify['terms']:
                         classify['terms'].append(term)
-
 
         # add time derivatives
         for i in classify['dep']:
@@ -123,7 +122,7 @@ class PDE_FIND():
         for der in classify['derivatives']:
             v = der.split('_')[0]
             ind = der.split('_')[1]
-            data = deepcopy(self.u[self.vars[v], :]).numpy()
+            data = deepcopy(self.u[self.vars[v], :])
             if ind == 't' and periodic:
                 temp_periodic = False
             else:
@@ -133,7 +132,7 @@ class PDE_FIND():
                     axis=self.vars[d]-len(classify['dep']),
                     periodic=temp_periodic)
                 data = fd(data, self.axis[d])
-            derivatives[der] = torch.tensor(data.reshape(1, *data.shape))
+            derivatives[der] = data.reshape(1, *data.shape)
 
         print(len(derivatives), 'derivatives computed')
         print(derivatives.keys())
@@ -153,49 +152,86 @@ class PDE_FIND():
                     components.append(data)
                 else:
                     components.append(derivatives[term])
-            # TODO: change to torch not numpy
-            library_object = torch.tensor(np.prod(components, axis=0))
+            library_object = np.prod(components, axis=0)
 
             if not i:
                 library = library_object
             else:
-                library = torch.cat((library, library_object), dim=0)
-            print('term', '*'.join(terms), 'done', f"{i+1}/{len(classify['terms'])}")
+                library = np.concatenate((library, library_object), axis=0)
+            print('term', '*'.join(terms), 'done',
+                  f"{i+1}/{len(classify['terms'])}")
 
         assert len(library) == len(classify['terms'])
         classify['library'] = library.squeeze()
 
     def plot(self, data, name, idx=0):
         """Plot u and u dot in two subplots"""
-
-        fig, ax = plt.subplots(1, 2, figsize=(9, 4))
+        var = name.split('_')[0]
+        fig, ax = plt.subplots(1, 2, figsize=(9, 4), sharey=True)
         fig.tight_layout()
 
         ax[0].pcolormesh(self.t, self.x, self.u[idx, :, :])
-        ax[0].set_title(r'$u(x, t)$')
-        ax[0].set_xlabel(r'$t$')
-        ax[0].set_ylabel(r'$x$')
+        ax[0].set_title(f'${var}(x, t)$')
+        ax[0].set_xlabel('$t$')
+        ax[0].set_ylabel('$x$')
+        fig.colorbar(ax[0].pcolormesh(self.t, self.x, self.u[idx, :, :]), ax=ax[0])
 
         # get derivative
         ax[1].pcolormesh(self.t, self.x, data)
         ax[1].set_title(f'${name}(x, t)$')
-        ax[1].set_xlabel(r'$t$')
-        ax[1].set_ylabel(r'$x$')
+        ax[1].set_xlabel('$t$')
+        fig.colorbar(ax[1].pcolormesh(self.t, self.x, data), ax=ax[1])
+
         return fig
+
+    def plot_results(self, reference, data, var='u'):
+        """Plot results and difference in two subplots"""
+        fig, ax = plt.subplots(1, 2, figsize=(9, 4), sharey=True)
+        fig.tight_layout()
+
+        ax[0].pcolormesh(self.t, self.x, data)
+        ax[0].set_title(f'${var}_t'+'^{pred}(x, t)$')
+        ax[0].set_xlabel('$t$')
+        ax[0].set_ylabel('$x$')
+        fig.colorbar(ax[0].pcolormesh(self.t, self.x, data), ax=ax[0])
+
+        # get derivative
+        ax[1].pcolormesh(self.t, self.x, data-reference)
+        ax[1].set_title(f'$\Delta ({var}_t$'+'$^{pred}-$'+f'${var}_t)(x, t)$')
+        ax[1].set_xlabel('$t$')
+        # add colorbar
+        fig.colorbar(ax[1].pcolormesh(self.t, self.x, data-reference), ax=ax[1])
+
+        print('MSE:', np.mean((data-reference)**2).item())
+        return fig
+
 
     def solve(self, inputs, target, sparsity_threshold, **kwargs):
         """Solve the linear regression problem using Lasso regression"""
-        inputs_ = inputs.flatten(start_dim=1).numpy()
-        target_ = target.flatten().numpy()
+
+        assert not (np.isnan(inputs)).sum(), "Inputs contain NaNs"
+        assert not (np.isinf(inputs)).sum(), "Inputs contain infinite values"
+        assert not (np.isnan(target)).sum(), "Target contains NaNs"
+        assert not (np.isinf(target)).sum(), "Target contains infinite values"
+
+        # flatten but omit the first dimension
+        inputs_ = inputs.reshape(inputs.shape[0], -1)
+        target_ = target.reshape(-1)
+
+        # turn to float64 due to error in LassoCV
+        inputs_ = np.array(inputs_, dtype=np.float64)
+        target_ = np.array(target_, dtype=np.float64)
+
+        kwargs['random_state'] = 42
 
         # Fit the Lasso regression model
         model = LassoCV(**kwargs)
         model.fit(inputs_.T, target_)
         print('Best alpha:', model.alpha_)
 
-        weights = torch.tensor(model.coef_)
+        weights = np.array(model.coef_)
         # enforce sparsity
-        weights[torch.abs(weights) < sparsity_threshold] = 0
+        weights[np.abs(weights) < sparsity_threshold] = 0
 
         return weights
 
@@ -204,17 +240,17 @@ class PDE_FIND():
         components = library['library']
         names = library['terms']
 
-        # create tensor on ones with the same shape as the components
+        # create array on ones with the same shape as the components
         dim = len(components.shape)-1
-        inputs = len(components)
-        y_pred = torch.sum(weights.view(inputs, *([1]*dim)) * components, dim=0)
+        weights_ = weights.reshape(weights.shape[0], *[1]*dim)
+        y_pred = np.sum(weights_ * components, axis=0)
         used = [f'{weight:.2}*{term}' for term,
-                weight in zip(names, weights.numpy()) if weight != 0]
+                weight in zip(names, weights) if weight != 0]
 
         if not no_terms:
             no_terms = len(used)
 
-        idx = torch.argsort(torch.abs(weights), descending=True)
+        idx = np.argsort(-np.abs(weights))
         # retain largest terms given by no_terms
         idx = idx[:no_terms]
         used = [f'{weights[i]:.2}{names[i]}' for i in idx]
@@ -245,7 +281,7 @@ class PDE_FIND_3D(PDE_FIND):
 
     def subsample_data(self, derivatives, percent=0.6):
         """Subsample data to n points"""
-        # Subsample is possible because we are also passing the derivatives to 
+        # Subsample is possible because we are also passing the derivatives to
         # the solver, used in case of too many data points
         subsample = np.random.choice(
             len(self.t), int(len(self.t) * percent), replace=False)
@@ -279,8 +315,7 @@ class PDE_FIND_3D(PDE_FIND):
 
         # get dep var
         var = name.split('_')[0]
-
-        fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+        fig, ax = plt.subplots(1, 2, figsize=(9, 4))
 
         ax[0].pcolormesh(self.x, self.y, self.u[self.vars[var], :, :, idx])
         ax[0].set_title(f'${var}(x, t)$')
