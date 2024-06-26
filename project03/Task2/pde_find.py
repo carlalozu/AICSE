@@ -168,7 +168,8 @@ class PDE_FIND():
         """Plot u and u dot in two subplots"""
         var = name.split('_')[0]
         fig, ax = plt.subplots(1, 2, figsize=(9, 4), sharey=True)
-        fig.tight_layout()
+        fig.tight_layout(pad=2.0)
+        fig.subplots_adjust(left=0.1)
 
         ax[0].pcolormesh(self.t, self.x, self.u[idx, :, :])
         ax[0].set_title(f'${var}(x, t)$')
@@ -187,7 +188,8 @@ class PDE_FIND():
     def plot_results(self, reference, data, var='u'):
         """Plot results and difference in two subplots"""
         fig, ax = plt.subplots(1, 2, figsize=(9, 4), sharey=True)
-        fig.tight_layout()
+        fig.tight_layout(pad=2.0)
+        fig.subplots_adjust(left=0.1)
 
         ax[0].pcolormesh(self.t, self.x, data)
         ax[0].set_title(f'${var}_t'+'^{pred}(x, t)$')
@@ -219,8 +221,8 @@ class PDE_FIND():
         target_ = target.reshape(-1)
 
         # turn to float64 due to error in LassoCV
-        inputs_ = np.array(inputs_, dtype=np.float64)
-        target_ = np.array(target_, dtype=np.float64)
+        inputs_ = np.array(inputs_, dtype=np.float32)
+        target_ = np.array(target_, dtype=np.float32)
 
         kwargs['random_state'] = 42
 
@@ -315,17 +317,43 @@ class PDE_FIND_3D(PDE_FIND):
 
         # get dep var
         var = name.split('_')[0]
-        fig, ax = plt.subplots(1, 2, figsize=(9, 4))
+        fig, ax = plt.subplots(1, 2, figsize=(9, 4), sharey=True)
+        fig.tight_layout(pad=2.0)
+        # add slight pad to the left
+        fig.subplots_adjust(left=0.1)
 
         ax[0].pcolormesh(self.x, self.y, self.u[self.vars[var], :, :, idx])
         ax[0].set_title(f'${var}(x, t)$')
         ax[0].set_xlabel('$t$')
         ax[0].set_ylabel('$x$')
+        fig.colorbar(ax[0].pcolormesh(self.x, self.y, self.u[self.vars[var], :, :, idx]), ax=ax[0])
 
         # get derivative
         ax[1].pcolormesh(self.x, self.y, data[:, :, idx])
         ax[1].set_title(f'${name}(x, t)$')
         ax[1].set_xlabel('$t$')
-        ax[1].set_ylabel('$x$')
+        fig.colorbar(ax[1].pcolormesh(self.x, self.y, data[:, :, idx]), ax=ax[1])
 
+        return fig
+
+    def plot_results(self, reference, data, var='u'):
+        """Plot results and difference in two subplots"""
+        fig, ax = plt.subplots(1, 2, figsize=(9, 4), sharey=True)
+        fig.tight_layout(pad=2.0)
+        fig.subplots_adjust(left=0.1)
+
+        ax[0].pcolormesh(self.x, self.y, data)
+        ax[0].set_title(f'${var}_t'+'^{pred}(x, t)$')
+        ax[0].set_xlabel('$t$')
+        ax[0].set_ylabel('$x$')
+        fig.colorbar(ax[0].pcolormesh(self.x, self.y, data), ax=ax[0])
+
+        # get derivative
+        ax[1].pcolormesh(self.x, self.y, data-reference)
+        ax[1].set_title(f'$\Delta ({var}_t$'+'$^{pred}-$'+f'${var}_t)(x, t)$')
+        ax[1].set_xlabel('$t$')
+        # add colorbar
+        fig.colorbar(ax[1].pcolormesh(self.x, self.y, data-reference), ax=ax[1])
+
+        print('MSE:', np.mean((data-reference)**2).item())
         return fig
