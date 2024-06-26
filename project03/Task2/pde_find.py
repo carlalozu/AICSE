@@ -211,16 +211,11 @@ class PDE_FIND():
     def solve(self, inputs, target, sparsity_threshold, **kwargs):
         """Solve the linear regression problem using Lasso regression"""
 
-        assert not (np.isnan(inputs)).sum(), "Inputs contain NaNs"
-        assert not (np.isinf(inputs)).sum(), "Inputs contain infinite values"
-        assert not (np.isnan(target)).sum(), "Target contains NaNs"
-        assert not (np.isinf(target)).sum(), "Target contains infinite values"
-
         # flatten but omit the first dimension
         inputs_ = inputs.reshape(inputs.shape[0], -1)
         target_ = target.reshape(-1)
 
-        # turn to float64 due to error in LassoCV
+        # turn to float23 due to error in LassoCV
         inputs_ = np.array(inputs_, dtype=np.float32)
         target_ = np.array(target_, dtype=np.float32)
 

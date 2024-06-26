@@ -1,6 +1,8 @@
 \documentclass[unicode,11pt,a4paper,oneside,numbers=endperiod,openany]{scrartcl}
 \usepackage{amsmath}
 \usepackage{amssymb}
+\usepackage{enumitem}
+\usepackage{multicol}
 \input{assignment.sty}
 
 \begin{document}
@@ -15,7 +17,8 @@
 \newline
 
 The main objective of the project is to apply the concepts learned in class
-related to Neural Differential Equations and Hybrid Workflows.
+related to Neural Differential Equations and Hybrid Workflows, as well as to
+a bonus quastion regarding Transfer Learning.
 
 
 \section{Inverted pendulum}\label{sec:task1}
@@ -45,7 +48,7 @@ implementations, I simulated the system with a sinusoidal force $F(t) = 10
 The results are shown in Figure~\ref{fig:pendulum}.
 \begin{figure}[h]
     \centering
-    \includegraphics[width=0.8\textwidth]{../Task1/pendulum.pdf}
+    \includegraphics[width=0.85\textwidth]{../Task1/pendulum.pdf}
     \caption{Simulation of the inverted pendulum with a sinusoidal force.}
     \label{fig:pendulum}
 \end{figure}
@@ -62,7 +65,9 @@ has a single neuron with linear activation function. The network is trained for
 500 epochs with an initial learning rate of $10^{-2}$ and a scheduler that
 reduces the learning rate by a factor of 0.5 every 75 epochs.
 The plot of the loss function during training is shown in Figure~\ref{fig:loss}.
-\begin{figure}[h]
+
+\begin{figure}[h!]
+    \hspace*{-1cm}
     \centering
     \includegraphics[width=0.8\textwidth]{../Task1/loss_function.pdf}
     \caption{Loss function during training of the Neural Network.}
@@ -70,9 +75,9 @@ The plot of the loss function during training is shown in Figure~\ref{fig:loss}.
 \end{figure}
 The results of the simulation using the Neural Network to control the force
 applied to the cart are shown in Figure~\ref{fig:pendulum_nn}.
-\begin{figure}[h]
+\begin{figure}[h!]
     \centering
-    \includegraphics[width=0.8\textwidth]{../Task1/pendulum_nn.pdf}
+    \includegraphics[width=0.85\textwidth]{../Task1/pendulum_nn.pdf}
     \caption{Simulation of the inverted pendulum using a Neural Network to
     control the force applied to the cart.}
     \label{fig:pendulum_nn}
@@ -81,38 +86,224 @@ applied to the cart are shown in Figure~\ref{fig:pendulum_nn}.
 Attatched to the report you will find the code used to solve the ODE system and
 train the Neural Network, as well as the simulation results in a gif format.
 
-\section{PDE-FIND}\label{sec:task2}
-The objective of this task is to use the PDE-FIND~\cite{PDEFIND} to discover the
+\section{Model discovery}\label{sec:task2}
+The objective of this task is to write our own PDE-FIND~\cite{PDEFIND} algorithm to discover the
 differential equation that governs the dynamics of the some unkown system using
-only data files.
+only provided data files.
 
-The idea is that we can assume that the dynamics of the system can be described
-by a partial differential equation of the form:
-\begin{align}
-    u_t = F(u, u_x, u_{xx}, u_y, u_{yy}, u_{xy}, \ldots, x, y, \ldots, t)
+Based on the assumption that the dynamics of the system can be described
+by a partial differential equation of the form,
+\begin{align}\label{eq:pde}
+    u_t = F(u, u_x, u_{xx}, u_y, u_{yy}, u_{xy}, \ldots, x, y, \ldots, t),
 \end{align}
-So we can create a library of possible functions that can appear in the right
-hand side of the equation and use the data to find the coefficients of the
-functions that best describe the dynamics of the system.
-
+we can create a library of possible functions that can appear in the right
+hand side of the equation,
+\begin{align}\label{eq:library}
+    \Theta(\mathbf{u}) = [ \mathbf{u}, \mathbf{u}_x, \mathbf{u}_{xx}, \mathbf{u}_y, \mathbf{u}_{yy}, \mathbf{u}_{xy}, \mathbf{u}\mathbf{u}_x, \mathbf{u}\mathbf{u}_y, \ldots ].
+\end{align}
+We then use the given data to find the coefficients of the
+functions that best describe the dynamics of the system,
+\begin{align}\label{eq:coefficients}
+    \mathbf{u}_t = \Theta(\mathbf{u})\xi,
+\end{align}
+where $\xi$ are the coefficients of the functions in the library.
 We are given three files with data of differents system for which we want to
 find the PDE that governs the dynamics.
 
 \subsection*{Implementation of PDE-FIND}
-We will use the library PySINDy to use the PDE-FIND
-algorithm. 
+My implementation of the PDE-FIND consists on using finite difference scheme to
+compute partial derivatives of the data, building the library of possible functions
+and using Ridge regression to find the coefficients or weights.
+
+The finite difference scheme is taken directly from the \texttt{pysindy} library
+\cite{PDEFIND}. It computes the centered differences of the data to approximate
+the partial derivatives, with consideration of the boundary conditions.
+I used it recursively to compute the second and third order
+mixed derivatives. 
+Next, to build the library of possible functions, I included linear and non-linear
+combinations of the computed derivatives up to the third order, without including
+the time and space coordinates as possible functions. We also exclude mixed
+derivatives with that include time. I added a parameter to control the maximum
+number of terms in the library.
+Finally, I used Ridge regression to find the coefficients of the functions as in
+Equation~\eqref{eq:coefficients}. To ensure sparsity, I added a filter to remove
+coefficients that are below a certain threshold, which I set to $10^{-2}$.
+
 
 \subsection*{File 1}
 The first file is a 1+1D dimensional system $u$, with $x$ and $t$ coordinates.
+The algorithm requires the user to specify the dependent and independent
+variables
+and the maximum order of the derivatives to compute, in our case 3.
+In the file we find the dependent variable $u$ and the independent variables $x$
+and $t$. 
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{../Task2/figures/data_1.png}
+    \caption{Data of the first file, with its temporal derivative.}
+\end{figure}
+Therefore, the derivatives we need are $\mathbf{u}_x$, $\mathbf{u}_{xx}$, $\mathbf{u}_{xxx}$.
+We can then build the library of possible functions as in
+Equation~\eqref{eq:library}, which includes the following functions:
+\begin{align}\label{eq:library1}
+    \Theta(\mathbf{u}) = [ \mathbf{u}, \mathbf{u}_x, \mathbf{u}_{xx}, \mathbf{u}_{xxx}, \mathbf{u}\mathbf{u}, \mathbf{u} \mathbf{u}_x, \mathbf{u} \mathbf{u}_{xx}, \mathbf{u} \mathbf{u}_{xxx}, \mathbf{u}_x \mathbf{u}_x, \mathbf{u}_x \mathbf{u}_{xx}, \mathbf{u}_x \mathbf{u}_{xxx}, \mathbf{u}_{xx} \mathbf{u}_{xx}, \mathbf{u}_{xx} \mathbf{u}_{xxx}, \mathbf{u}_{xxx} \mathbf{u}_{xxx}, \mathbf{u}\mathbf{u}\mathbf{u} ].
+\end{align}
+The results of the PDE-FIND algorithm are
+\begin{align}
+    %	-1.0u*u_x + 0.1u_xx = u_t
+    \mathbf{u}_t = -1.0 \mathbf{u} \mathbf{u}_x + 0.1 \mathbf{u}_{xx}.
+\end{align}
+From the results, we can discover that the system is governed by the
+Burgers equation.
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{../Task2/figures/results_1.png}
+    \caption{Prediction of the first file using the discovered PDE.}
+
+\end{figure}
 
 \subsection*{File 2}
-The first file is also a 1+1D dimensional system $u$, with $x$ and $t$ coordinates.
+The second file is also a 1+1D dimensional system $u(t, x)$. The same
+derivatives and terms are computed as in the previous case, shown in Equation~\eqref{eq:library1}.
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{../Task2/figures/data_2.png}
+    \caption{Data of the second file, with its temporal derivative.}
+\end{figure}
+The results of the PDE-FIND algorithm are
+\begin{align}
+    % 	-5.4u*u_x + -0.9u_xxx + -0.11u_x*u_xx + -0.081u_x = u_t
+    \mathbf{u}_t = -5.4 \mathbf{u} \mathbf{u}_x - 0.9 \mathbf{u}_{xxx} - 0.11 \mathbf{u}_x \mathbf{u}_{xx} - 0.081 \mathbf{u}_x.
+\end{align}
+From the results, we can discover that the system is governed by the
+Korteweg-de Vries equation if we ignore the terms $\mathbf{u}_x \mathbf{u}_{xx}$ and
+$\mathbf{u}_x$. Since this file is a bit more complex, the algorithm is not able
+to find the exact equation. Perhaps using a finer grid could help to improve the
+results due to the higher order derivatives.
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{../Task2/figures/results_2.png}
+    \caption{Prediction of the second file using the discovered PDE.}
+\end{figure}
+
 \subsection*{File 3}
 The third file is a 2+1D dimensional system, with $x$, $y$ and $t$ coordinates.
+Where the solution is a vector
+field with two components, i.e. $u(x, t)$ and $v(x, t)$. In this case the PDE is a set of two coupled
+equations of the form
+\begin{align}
+    % ut = D1(u, ux, v, vx, uv, ...),
+    % vt = D2(u, ux, v, vx, uv, ...).
+    \mathbf{u}_t = D_1(\mathbf{u}, \mathbf{u}_x, \mathbf{v}, \mathbf{v}_x, \mathbf{u} \mathbf{v}, \ldots) \\
+    \mathbf{v}_t = D_2(\mathbf{u}, \mathbf{u}_x, \mathbf{v}, \mathbf{v}_x, \mathbf{u} \mathbf{v}, \ldots).
+\end{align}
+This time, the library of possible functions includes the 52 terms, as shown in
+the Appendix~\ref{app:terms3}.
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{../Task2/figures/data_u_3.png}
+    \caption{Data of the third file, with its temporal derivative for the first variable.}
+\end{figure}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{../Task2/figures/data_v_3.png}
+    \caption{Data of the third file, with its temporal derivative for the second variable.}
+\end{figure}
+The results of the PDE-FIND algorithm are
+\begin{align}
+    %       0.85v*v*v + 0.85u*u*v + 0.62u + -0.6u*u*u + -0.6u*v*v + 0.13v +
+    %       0.085u_xx + 0.081u_yy = u_t
+    \mathbf{u}_t &= 0.85 \mathbf{v}^3 + 0.85 \mathbf{u}^2 \mathbf{v} + 0.62 \mathbf{u} - 0.6 \mathbf{u}^3 - 0.6 \mathbf{u} \mathbf{v}^2 + 0.13 \mathbf{v} + 0.085 \mathbf{u}_{xx} + 0.081 \mathbf{u}_{yy}, \\
+    %       -0.85u*u*u + -0.85u*v*v + 0.62v + -0.6v*v*v + -0.6u*u*v + -0.13u + 0.085v_yy + 0.081v_xx = v_t
+    \mathbf{v}_t &= -0.85 \mathbf{u}^3 - 0.85 \mathbf{u} \mathbf{v}^2 + 0.62 \mathbf{v} - 0.6 \mathbf{v}^3 - 0.6 \mathbf{u}^2 \mathbf{v} - 0.13 \mathbf{u} + 0.085 \mathbf{v}_{yy} + 0.081 \mathbf{v}_{xx}.
+\end{align}
+From the results, we can discover that the system is a reaction-diffusion
+system. We can see the terms match between the two equations. 
+We can infer that the system is a reaction-diffusion system with a non-linear
+reaction term and a diffusion term:
+\begin{align}
+    % $$u_t = 0.1\nabla^2 u + (1-A^2)u +\beta A^2v$$
+    % $$v_t = 0.1\nabla^2 v - \beta A^2 u + (1-A^2)v$$
+    % $$A^2 = u^2 + v^2.$$
+    \mathbf{u}_t &= 0.1 \nabla^2 \mathbf{u} + (1 - A^2) \mathbf{u} + \beta A^2 \mathbf{v}, \\
+    \mathbf{v}_t &= 0.1 \nabla^2 \mathbf{v} - \beta A^2 \mathbf{u} + (1 - A^2) \mathbf{v}, \\
+    A^2 &= \mathbf{u}^2 + \mathbf{v}^2.
+\end{align}
+but the algorithm is not able to find the exact equation, with some extra terms
+(e.g. $0.13v$ and $0.62u$) that could be due to the noise in the data.
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{../Task2/figures/results_u_3.png}
+    \caption{Prediction of the third file for the first variable using the discovered PDE.}
+\end{figure}
 
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{../Task2/figures/results_v_3.png}
+    \caption{Prediction of the third file for the second variable using the discovered PDE.}
+\end{figure}
 
-\section{Bonus Task}\label{sec:task3}
+% \section{Transfer learning}\label{sec:task3}
 
+\appendix
+\section{Library of possible functions for File 3}\label{app:terms3}
+The library of possible functions for the third file is shown below.
+\begin{multicols}{5}
+\begin{itemize}[noitemsep, topsep=0pt, left=0pt]
+    \item $\mathbf{u}$
+    \item $\mathbf{v}$
+    \item $\mathbf{u}_{x}$
+    \item $\mathbf{u}_{xx}$
+    \item $\mathbf{u}_{xxx}$
+    \item $\mathbf{u}_{xxy}$
+    \item $\mathbf{u}_{xy}$
+    \item $\mathbf{u}_{xyx}$
+    \item $\mathbf{u}_{xyy}$
+    \item $\mathbf{u}_{y}$
+    \item $\mathbf{u}_{yy}$
+    \item $\mathbf{u}_{yyx}$
+    \item $\mathbf{u}_{yyy}$
+    \item $\mathbf{v}_{x}$
+    \item $\mathbf{v}_{xx}$
+    \item $\mathbf{v}_{xxx}$
+    \item $\mathbf{v}_{xxy}$
+    \item $\mathbf{v}_{xy}$
+    \item $\mathbf{v}_{xyx}$
+    \item $\mathbf{v}_{xyy}$
+    \item $\mathbf{v}_{y}$
+    \item $\mathbf{v}_{yy}$
+    \item $\mathbf{v}_{yyx}$
+    \item $\mathbf{v}_{yyy}$
+    \item $\mathbf{u} \mathbf{u}$
+    \item $\mathbf{v} \mathbf{v}$
+    \item $\mathbf{u}_{x} \mathbf{u}_{x}$
+    \item $\mathbf{u}_{xx} \mathbf{u}_{xx}$
+    \item $\mathbf{u}_{xxx} \mathbf{u}_{xxx}$
+    \item $\mathbf{u}_{xxy} \mathbf{u}_{xxy}$
+    \item $\mathbf{u}_{xy} \mathbf{u}_{xy}$
+    \item $\mathbf{u}_{xyx} \mathbf{u}_{xyx}$
+    \item $\mathbf{u}_{xyy} \mathbf{u}_{xyy}$
+    \item $\mathbf{u}_{y} \mathbf{u}_{y}$
+    \item $\mathbf{u}_{yy} \mathbf{u}_{yy}$
+    \item $\mathbf{u}_{yyx} \mathbf{u}_{yyx}$
+    \item $\mathbf{u}_{yyy} \mathbf{u}_{yyy}$
+    \item $\mathbf{v}_{x} \mathbf{v}_{x}$
+    \item $\mathbf{v}_{xx} \mathbf{v}_{xx}$
+    \item $\mathbf{v}_{xxx} \mathbf{v}_{xxx}$
+    \item $\mathbf{v}_{xxy} \mathbf{v}_{xxy}$
+    \item $\mathbf{v}_{xy} \mathbf{v}_{xy}$
+    \item $\mathbf{v}_{xyx} \mathbf{v}_{xyx}$
+    \item $\mathbf{v}_{xyy} \mathbf{v}_{xyy}$
+    \item $\mathbf{v}_{y} \mathbf{v}_{y}$
+    \item $\mathbf{v}_{yy} \mathbf{v}_{yy}$
+    \item $\mathbf{v}_{yyx} \mathbf{v}_{yyx}$
+    \item $\mathbf{v}_{yyy} \mathbf{v}_{yyy}$
+    \item $\mathbf{u} \mathbf{u} \mathbf{u}$
+    \item $\mathbf{u} \mathbf{u} \mathbf{v}$
+    \item $\mathbf{u} \mathbf{v} \mathbf{v}$
+    \item $\mathbf{v} \mathbf{v} \mathbf{v}$
+\end{itemize}
+\end{multicols}
 
 \bibliographystyle{plain}
 \bibliography{bibliography}
