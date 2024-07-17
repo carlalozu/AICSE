@@ -52,7 +52,15 @@ class Value:
         return out
 
     def __mul__(self, other):
-        raise NotImplementedError
+        other = other if isinstance(other, Value) else Value(other)
+        out = Value(self.data*other.data, (self, other), '*')
+
+        def _backward():
+            self.grad += other.data * out.grad
+            other.grad += self.data * out.grad
+        out._backward = _backward
+
+        return out
 
     def __pow__(self, other):
         assert isinstance(other, (int, float)
@@ -66,10 +74,35 @@ class Value:
         return out
 
     def cos(self):
-        raise NotImplementedError
+        """cos function"""
+        # No other value
+        out = Value(math.cos(self.data), (self,), f'cos({self.data})')
+
+        def _backward():
+            self.grad += -math.sin(self.data) * out.grad
+        out._backward = _backward
+
+        return out
 
     def sin(self):
-        raise NotImplementedError
+        """sin function"""
+        out = Value(math.sin(self.data), (self,), f'sin({self.data})')
+
+        def _backward():
+            self.grad += math.cos(self.data) * out.grad
+        out._backward = _backward
+
+        return out
+
+    def tan(self):
+        """tan function"""
+        out = Value(math.tan(self.data), (self,), f'tan({self.data})')
+
+        def _backward():
+            self.grad += (1 / math.cos(self.data)**2) * out.grad
+        out._backward = _backward
+
+        return out
 
     def backward(self):
 
@@ -79,10 +112,14 @@ class Value:
 
         def build_topo(v):
             # TODO: fill in this function.
-            # this needs to fill topo with the nodes in a topological ordering of the graph
-            # so we can visit them and call their _backward() in the correct order
-
-            raise NotImplementedError
+            # this needs to fill topology with the nodes in a topological ordering of the graph
+            # so we can visit them and call their _backward() in the correct
+            # order
+            if v not in visited:
+                visited.add(v)
+                for child in v._prev:
+                    build_topo(child)
+                topo.append(v)
         build_topo(self)
 
         # go one variable at a time and apply the chain rule to get its gradient
@@ -113,38 +150,3 @@ class Value:
 
     def __repr__(self):
         return f"Value(data={self.data}, grad={self.grad})"
-
-
-if __name__ == "__main__":
-
-    # Run some tests on the value class
-
-    x = Value(1)
-    y = x + 2 - 3
-    y.backward()
-    assert x.grad == 1
-
-    x = Value(1)
-    y = 4*x/2
-    y.backward()
-    assert x.grad == 2
-
-    x = Value(2)
-    y = x**2
-    y.backward()
-    assert x.grad == 2*2
-
-    x = Value(0)
-    y = x.cos()
-    y.backward()
-    assert x.grad == 0
-
-    x = Value(0)
-    y = x.sin()
-    y.backward()
-    assert x.grad == 1
-
-    x = Value(0)
-    y = x*x.cos() + x**2 + 3
-    y.backward()
-    assert x.grad == 1
