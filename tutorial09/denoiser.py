@@ -10,11 +10,10 @@ class DDPM(nn.Module):
     """Denoising Diffusion Probabilistic Model"""
 
     def __init__(
-            self, num_timesteps, beta_start=0.0001, beta_end=0.02) -> None:
+            self, num_timesteps, beta_start=0.0001, beta_end=0.02, device=None) -> None:
         super().__init__()
-        self.network = MyTinyUNet()
-
         self.num_timesteps = num_timesteps
+        self.device = device
 
         self.betas = torch.linspace(
             beta_start, beta_end, num_timesteps, dtype=torch.float32)  # schedule for beta
@@ -30,26 +29,21 @@ class DDPM(nn.Module):
         # timesteps (bs)
 
         ########################################
-        mu = 1/self.alphas[timesteps]*(x_start-(1-self.alphas[timesteps]) /
-                                      self.sqrt_one_minus_alphas_cumprod[timesteps]*x_noise)
-        gamma = self.beta[timesteps]*(1-self.alphas_cumprod[timesteps-1]) / \
-            (1-self.alphas_cumprod[timesteps])
-
-        return mu + gamma**0.5*torch.randn_like(x_start)
-        ########################################
-
-    def reverse(self, x, t):
-        """The network return the estimation of the noise we added"""
-        return self.network(x, t)
-
-    def forward(self, x):
-        """The forward process"""
-        # x (bs, n_c, w, d)
-
-        ########################################
-        for t in range(self.num_timesteps):
-            x = self.add_noise(x, self.reverse(x, t), t)
-        return x
+#         mu = 1/self.alphas[timesteps]*(x_start-(1-self.alphas[timesteps]) /
+#                                        self.sqrt_one_minus_alphas_cumprod[timesteps]*x_noise)
+#         gamma = self.beta[timesteps]*(1-self.alphas_cumprod[timesteps-1]) / \
+#             (1-self.alphas_cumprod[timesteps])
+# 
+#         return mu + gamma**0.5*torch.randn_like(x_start)
+    
+        # The forward process
+        # x_start and x_noise (bs, n_c, w, d)
+        # timesteps (bs)
+        s1 = self.sqrt_alphas_cumprod[timesteps] # bs
+        s2 = self.sqrt_one_minus_alphas_cumprod[timesteps] # bs
+        s1 = s1.reshape(-1,1,1,1) # (bs, 1, 1, 1) for broadcasting
+        s2 = s2.reshape(-1,1,1,1) # (bs, 1, 1, 1)
+        return s1 * x_start + s2 * x_noise
         ########################################
 
     def step(self, predicted_noise, timestep, sample):
@@ -60,10 +54,17 @@ class DDPM(nn.Module):
         ########################################
         inner_term = sample - \
             (1-self.alphas[timestep]) / \
-            self.sqrt_one_minus_alphas_cumprod[timestep]*predicted_noise
-        epsilon = torch.rand_like(sample)
-        add_term = self.beta[timestep]**0.5 * epsilon
-        return inner_term/(self.alphas[timestep]**0.5)+add_term
+            self.sqrt_one_minus_alphas_cumprod[timestep]
+        inner_term_t = inner_term.reshape(-1,1,1,1)[timestep]
+
+        coeff_term_t = (1/self.alphas**0.5).reshape(-1,1,1,1)[timestep]
+
+        epsilon = 0
+        if timestep:
+            epsilon = torch.rand_like(predicted_noise)
+        wiener_process = self.betas[timestep]**0.5 * epsilon
+
+        return coeff_term_t*(sample-inner_term_t*predicted_noise)+wiener_process
         ########################################
 
     def generate_image(self, sample_size=100, channel=1, size=32):
@@ -78,7 +79,7 @@ class DDPM(nn.Module):
             sample_denoised = sample
             for i, t in enumerate(tqdm(timesteps)):
                 ########################################
-                sample_denoised = self.step(sample_denoised, t)
+                sample = self.step(sample_denoised, t, sample)
                 ########################################
 
                 if t == 500:

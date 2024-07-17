@@ -6,6 +6,9 @@ from denoiser import DDPM
 from tqdm import tqdm
 from torch import nn
 
+import warnings
+warnings.filterwarnings("ignore")
+
 
 class Trainer():
     """Trainer for DDPM"""
@@ -19,14 +22,14 @@ class Trainer():
 
         self.network = MyTinyUNet().to(self.device)
 
-        self.model = DDPM(self.network, num_timesteps, beta_start=0.0001,
+        self.model = DDPM(num_timesteps, beta_start=0.0001,
                           beta_end=0.02, device=self.device)
 
         if self.verbose:
             for n, p in self.model.named_parameters():
                 print(n, p.shape)
 
-    def plot(self, title=""):
+    def plot_inputs(self, title=""):
         """Plots the provided images in a square"""
         for b in self.dataloader:
             batch = b[0]
@@ -49,7 +52,7 @@ class Trainer():
             dataset=dataset, batch_size=4096, shuffle=True, num_workers=10)
         return dataloader
 
-    def train(self, num_epochs, learning_rate):
+    def train(self, num_epochs, num_timesteps, learning_rate):
         """Training loop for DDPM"""
         optimizer = torch.optim.Adam(
             self.network.parameters(), lr=learning_rate)
@@ -62,13 +65,20 @@ class Trainer():
             self.model.train()
             progress_bar = tqdm(total=len(self.dataloader))
             progress_bar.set_description(f"Epoch {epoch}")
-            for input_batch, output_batch in self.dataloader:
+            for input_batch, _ in self.dataloader:
                 ########################################
                 optimizer.zero_grad()
-                output_pred_batch = self.model(input_batch)
-                loss = l(output_pred_batch, output_batch) / \
-                    l(output_batch, torch.zeros_like(output_batch))
+
+                noise = torch.randn(input_batch.shape).to(self.device)
+                timesteps = torch.randint(
+                    0, num_timesteps, (input_batch.shape[0],)).long().to(self.device)
+
+                noisy = self.model.add_noise(
+                    input_batch, noise, timesteps)
+                noise_pred = self.network(noisy, timesteps)
+                loss = l(noise_pred, noise)
                 loss.backward()
+                optimizer.step()
                 train_mse += loss.item()
                 ########################################
 
@@ -91,3 +101,9 @@ class Trainer():
             progress_bar.close()
 
         return losses
+
+    def plot(self, mid=False):
+        generated, generated_mid = self.model.generate_image()
+        self.model.show_images(generated, title="Generated")
+        if mid:
+            self.model.show_images(generated_mid, title="Generated Mid")
