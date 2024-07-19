@@ -1,11 +1,11 @@
-import jax.numpy as jnp
-import jax.random as jr
-import matplotlib.pyplot as plt
+"""Lotka-Volterra"""
 import jax
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
 
 
 class LotkaVolterra():
-    """Class for solving the Lotka-Volterra equations"""
+    """Class for solving the Lotka-Volterra equations using JAX"""
 
     def __init__(self):
         pass

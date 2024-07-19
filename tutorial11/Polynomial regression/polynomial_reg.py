@@ -1,12 +1,13 @@
+"""Polynomial regression class using JAX"""
+import jax
 import jax.numpy as jnp
 import jax.random as jr
 
 import matplotlib.pyplot as plt
-import jax
 
 
 class PolynomialRegression():
-    """Placeholder for polynomial regression class using JAX"""
+    """Polynomial regression class using JAX and JIT compilation"""
 
     def __init__(self):
         self.x_batch, self.y_label_batch = self.assemble_datasets()
